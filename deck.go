@@ -11,11 +11,12 @@ import (
 
 // Deck represents the game deck
 type Deck struct {
-	cards     []*Card
-	discards  []*Card
-	rng       *rand.Rand
-	debugMode bool
-	scanner   *bufio.Scanner
+	cards         []*Card
+	discards      []*Card
+	rng           *rand.Rand
+	debugMode     bool
+	scanner       *bufio.Scanner
+	OriginalTotal int
 }
 
 // NewDeck creates a new deck with the correct card distribution for Flip 7
@@ -28,6 +29,7 @@ func NewDeck() *Deck {
 
 	deck.createCards()
 	deck.Shuffle()
+	deck.OriginalTotal = len(deck.cards)
 
 	return deck
 }

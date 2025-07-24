@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -28,15 +29,16 @@ type PlayerInterface interface {
 	GetTotalScore() int
 	GetPlayerIcon() string
 	AddCard(card *Card) error
-	UseSecondChance()
+	UseSecondChance() *Card
 	Stay()
 	Bust()
 	CalculateRoundScore() int
 	AddToTotalScore()
-	ResetForNewRound()
+	ResetForNewRound() []*Card
 	IsActive() bool
 	HasCards() bool
 	ShowHand()
+	GetHand() []*Card
 	GetHandSummary() string
 	ChooseActionTarget(gameState *GameState, actionType ActionType) (PlayerInterface, error)
 	ChoosePositiveActionTarget(gameState *GameState, actionType ActionType) (PlayerInterface, error)
@@ -113,21 +115,27 @@ func (p *BasePlayer) AddCard(card *Card) error {
 	return nil
 }
 
+func (p *BasePlayer) GetHand() []*Card {
+	return slices.Concat(p.NumberCards, p.ModifierCards, p.ActionCards)
+}
+
 // UseSecondChance uses the second chance card to avoid busting
-func (p *BasePlayer) UseSecondChance() {
+func (p *BasePlayer) UseSecondChance() *Card {
 	if !p.HasSecondChance() {
 		panic("no second change card to use")
 	}
+
+	p.SecondChance = false
 
 	// Remove second chance card
 	for i, card := range p.ActionCards {
 		if card.Action == SecondChance {
 			p.ActionCards = append(p.ActionCards[:i], p.ActionCards[i+1:]...)
-			break
+			return card
 		}
 	}
 
-	p.SecondChance = false
+	panic("no second chance card to use")
 }
 
 // Stay makes the player stay and bank their points
@@ -191,12 +199,14 @@ func (p *BasePlayer) AddToTotalScore() {
 }
 
 // ResetForNewRound resets the player's state for a new round
-func (p *BasePlayer) ResetForNewRound() {
+func (p *BasePlayer) ResetForNewRound() []*Card {
+	discardedCards := p.GetHand()
 	p.NumberCards = make([]*Card, 0)
 	p.ModifierCards = make([]*Card, 0)
 	p.ActionCards = make([]*Card, 0)
 	p.State = Active
 	p.SecondChance = false
+	return discardedCards
 }
 
 // IsActive returns true if the player is still active in the current round

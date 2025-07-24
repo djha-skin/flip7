@@ -133,7 +133,32 @@ func (g *Game) nextRound() {
 
 	// Reset players for new round
 	for _, player := range g.players {
-		player.ResetForNewRound()
+		discardedCards := player.ResetForNewRound()
+		for _, card := range discardedCards {
+			g.deck.DiscardCard(card)
+		}
+	}
+
+	totalCards := g.deck.CardsLeft() + len(g.deck.discards)
+	for _, player := range g.players {
+		totalCards += len(player.GetHand())
+	}
+
+	if totalCards != g.deck.OriginalTotal {
+		totals := map[string]int{}
+		for _, card := range g.deck.cards {
+			totals[card.String()]++
+		}
+		for _, card := range g.deck.discards {
+			totals[card.String()]++
+		}
+		for _, player := range g.players {
+			for _, card := range player.GetHand() {
+				totals[card.String()]++
+			}
+		}
+		fmt.Println(totals)
+		panic(fmt.Sprintf("Total cards is not the original total. Cards are disappearing! found: %d != excpected: %d", totalCards, g.deck.OriginalTotal))
 	}
 }
 
@@ -318,6 +343,7 @@ func (g *Game) handleActionCard(player PlayerInterface, card *Card) error {
 func (g *Game) handleFreezeCard(player PlayerInterface, card *Card) error {
 	target, err := g.chooseActionTarget(player, "Who should be frozen?", Freeze)
 	if err != nil {
+		g.deck.DiscardCard(card) // Discard card even if target selection fails
 		return err
 	}
 
@@ -332,6 +358,7 @@ func (g *Game) handleFreezeCard(player PlayerInterface, card *Card) error {
 func (g *Game) handleFlipThreeCard(player PlayerInterface, card *Card) error {
 	target, err := g.chooseActionTarget(player, "Who should flip three cards?", FlipThree)
 	if err != nil {
+		g.deck.DiscardCard(card) // Discard card even if target selection fails
 		return err
 	}
 
@@ -357,6 +384,8 @@ func (g *Game) handleFlipThreeCard(player PlayerInterface, card *Card) error {
 					g.endRoundForFlip7(target)
 					break // End the Flip Three loop
 				}
+				// Discard the action card if there was an error handling it
+				g.deck.DiscardCard(drawnCard)
 				return err
 			}
 		} else {
@@ -418,28 +447,15 @@ func (g *Game) handleCardAddError(player PlayerInterface, card *Card, err error)
 	}
 
 	if strings.Contains(err.Error(), "duplicate_with_second_chance") {
-		parts := strings.Split(err.Error(), ":")
-		if len(parts) > 1 {
-			duplicateValue := parts[1]
-			fmt.Printf("   💥 %s drew a duplicate %s but has Second Chance!\n", player.GetName(), duplicateValue)
-
-			if _, parseErr := strconv.Atoi(duplicateValue); parseErr == nil {
-				if player.HasSecondChance() {
-					player.UseSecondChance()
-					fmt.Printf("   🆘 %s used Second Chance to avoid busting!\n", player.GetName())
-					g.deck.DiscardCard(card) // Discard the duplicate
-					return nil
-				}
-			}
-		}
-
-		// If not using second chance, player busts
-		player.Bust()
-		fmt.Printf("   💥 %s chose not to use Second Chance and busts!\n", player.GetName())
+		fmt.Printf("   💥 %s drew a duplicate %s but has Second Chance!\n", player.GetName(), card)
+		secondChanceCard := player.UseSecondChance()
+		g.deck.DiscardCard(secondChanceCard) // Discard the second chance card
+		g.deck.DiscardCard(card)             // Discard the duplicate
 		return nil
 	}
 
 	if strings.Contains(err.Error(), "bust") {
+		g.deck.DiscardCard(card) // Discard the duplicate
 		fmt.Printf("   💥 %s busts and is out of the round!\n", player.GetName())
 		return nil
 	}
