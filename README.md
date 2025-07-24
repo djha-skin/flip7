@@ -26,7 +26,7 @@ Be the first player to score **200 or more points** by collecting cards across m
 #### ⚡ Action Cards
 - **❄️ Freeze** - Forces a player to stay and bank their points
 - **🎲 Flip Three** - Forces a player to draw 3 cards in succession  
-- **🆘 Second Chance** - Avoid busting once by discarding a duplicate
+- **🆘 Second Chance** - Automatically goes to the player who drew it (unless they already have one), allows avoiding a bust once by discarding a duplicate
 
 #### 🎯 Modifier Cards
 - **+2, +4, +6, +8, +10** - Add points to your number card total
@@ -54,11 +54,18 @@ go build .
 
 # Run the game
 ./flip7
+
+# Run with debug mode (choose cards manually)
+./flip7 -debug
 ```
 
 ### Quick Start
 ```bash
+# Normal game
 go run .
+
+# Debug mode
+go run . -debug
 ```
 
 ## 🎮 Gameplay Example
@@ -114,7 +121,7 @@ Alice: 10 points this round (Total: 10)
 
 1. **Know the odds** - Higher numbers have more copies, increasing bust risk
 2. **The zero card** is safe - only one copy in the deck, can't cause a bust
-3. **Second Chance cards** are powerful - save them for the right moment
+3. **Second Chance cards** are powerful - they automatically go to whoever draws them (unless they already have one), so save them for the right moment
 4. **Risk vs. reward** - Push your luck for higher scores, but know when to stay
 5. **Modifier cards** can multiply your score - but you need number cards first
 
@@ -138,6 +145,42 @@ flip7/
 - **Player Management**: State tracking, scoring, and hand display
 - **Game Engine**: Turn management, action card handling, and round flow
 - **CLI Interface**: User input validation and game state display
+
+### Debug Mode
+The game includes a debug mode for testing and development:
+
+```bash
+./flip7 -debug
+```
+
+In debug mode, you can manually choose which card to draw each turn:
+- Cards are organized by type (Number, Action, Modifier)
+- Shows how many of each card type are available
+- Perfect for testing specific scenarios like Flip 7, action card interactions, etc.
+
+**Example debug card selection:**
+```
+🐛 DEBUG: Choose a card to draw:
+Available cards (94 total):
+
+Number Cards:
+  1) [0] (1 available)
+  2) [1] (1 available)
+  3) [2] (2 available)
+  ...
+
+Action Cards:
+  14) ❄️ FREEZE (3 available)
+  15) 🎲 FLIP 3 (3 available)
+  16) 🆘 2ND CHANCE (3 available)
+
+Modifier Cards:
+  17) [+2] (1 available)
+  18) [+4] (1 available)
+  ...
+
+Enter choice (1-22): 
+```
 
 ### Key Features Implemented
 - ✅ Full Flip 7 rules implementation

@@ -59,6 +59,7 @@ func (p *Player) AddCard(card *Card) error {
 
 		// Check for Flip 7
 		if len(p.NumberCards) == 7 {
+			p.State = Stayed // Player automatically stays when achieving Flip 7
 			return fmt.Errorf("flip7")
 		}
 

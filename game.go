@@ -15,16 +15,24 @@ type Game struct {
 	round     int
 	dealerIdx int
 	scanner   *bufio.Scanner
+	debugMode bool
 }
 
 // NewGame creates a new Flip 7 game instance
 func NewGame() *Game {
 	return &Game{
-		players: make([]*Player, 0),
-		deck:    NewDeck(),
-		round:   1,
-		scanner: bufio.NewScanner(os.Stdin),
+		players:   make([]*Player, 0),
+		deck:      NewDeck(),
+		round:     1,
+		scanner:   bufio.NewScanner(os.Stdin),
+		debugMode: false,
 	}
+}
+
+// SetDebugMode enables or disables debug mode
+func (g *Game) SetDebugMode(debug bool) {
+	g.debugMode = debug
+	g.deck.SetDebugMode(debug, g.scanner)
 }
 
 // Run starts the main game loop
@@ -370,7 +378,8 @@ func (g *Game) handleFlipThreeCard(player *Player, card *Card) error {
 			if err := g.handleActionCard(target, drawnCard); err != nil {
 				if strings.Contains(err.Error(), "flip7") {
 					fmt.Printf("   🎉 %s achieved FLIP 7!\n", target.Name)
-					return err
+					g.endRoundForFlip7(target)
+					break // End the Flip Three loop
 				}
 				return err
 			}
@@ -389,6 +398,18 @@ func (g *Game) handleFlipThreeCard(player *Player, card *Card) error {
 }
 
 func (g *Game) handleSecondChanceCard(player *Player, card *Card) error {
+	// Try to give it to the player who drew it first
+	if !player.HasSecondChance {
+		if err := player.AddCard(card); err != nil {
+			return err
+		}
+		fmt.Printf("   🆘 %s receives a Second Chance card!\n", player.Name)
+		return nil
+	}
+
+	// Player already has second chance, need to give it to someone else
+	fmt.Printf("   🆘 %s already has Second Chance, must give to another player\n", player.Name)
+
 	target, err := g.chooseActionTarget(player, "Who should get the Second Chance card?")
 	if err != nil {
 		return err
@@ -446,7 +467,9 @@ func (g *Game) chooseActionTarget(player *Player, prompt string) (*Player, error
 func (g *Game) handleCardAddError(player *Player, card *Card, err error) error {
 	if strings.Contains(err.Error(), "flip7") {
 		fmt.Printf("   🎉 %s achieved FLIP 7 and wins the round!\n", player.Name)
-		return err
+		// Mark all other players as non-active to end the round
+		g.endRoundForFlip7(player)
+		return nil // Don't propagate the error, just end the round
 	}
 
 	if strings.Contains(err.Error(), "duplicate_with_second_chance") {
@@ -483,4 +506,14 @@ func (g *Game) handleCardAddError(player *Player, card *Card, err error) error {
 	}
 
 	return err
+}
+
+// endRoundForFlip7 marks all players except the Flip 7 achiever as non-active
+func (g *Game) endRoundForFlip7(flip7Player *Player) {
+	for _, player := range g.players {
+		if player != flip7Player && player.IsActive() {
+			player.Stay()
+			player.CalculateRoundScore()
+		}
+	}
 }
