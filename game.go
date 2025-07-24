@@ -542,9 +542,14 @@ func (g *Game) getComputerPlayerSetup(computerNum int) (string, HitOrStayStrateg
 	fmt.Println("  11) Hit p(BUST) < 0.4")
 	fmt.Println("  12) FLIP 7")
 	fmt.Println("  13) Random")
-	fmt.Print("Enter choice (1-13): ")
+	fmt.Println("  14) Adaptive Bust Prob (0.3)")
+	fmt.Println("  15) Expected Value")
+	fmt.Println("  16) Hybrid Strategy")
+	fmt.Println("  17) Gap-Based Strategy")
+	fmt.Println("  18) Optimal Strategy")
+	fmt.Print("Enter choice (1-18): ")
 
-	choice, err := g.getIntInput(1, 13)
+	choice, err := g.getIntInput(1, 18)
 	if err != nil {
 		choice = 13
 	}
@@ -574,6 +579,18 @@ func (g *Game) getComputerPlayerSetup(computerNum int) (string, HitOrStayStrateg
 		return "p(BUST) < 0.4", PlayToBustProbability(0.4), TargetLeaderStrategy, TargetLastPlaceStrategy, nil
 	case 12:
 		return "FLIP 7", AlwaysHitStrategy, TargetLeaderStrategy, TargetLastPlaceStrategy, nil
+	case 13:
+		return "Random", RandomHitOrStayStrategy, TargetRandomStrategy, TargetRandomStrategy, nil
+	case 14:
+		return "Adaptive Bust 0.3", AdaptiveBustProbabilityStrategy(0.3), TargetLeaderStrategy, TargetLastPlaceStrategy, nil
+	case 15:
+		return "Expected Value", ExpectedValueStrategy, TargetLeaderStrategy, TargetLastPlaceStrategy, nil
+	case 16:
+		return "Hybrid Strategy", HybridStrategy, TargetLeaderStrategy, TargetLastPlaceStrategy, nil
+	case 17:
+		return "Gap-Based", GapBasedStrategy, TargetLeaderStrategy, TargetLastPlaceStrategy, nil
+	case 18:
+		return "Optimal", OptimalStrategy, TargetLeaderStrategy, TargetLastPlaceStrategy, nil
 	default:
 		return "Random", RandomHitOrStayStrategy, TargetRandomStrategy, TargetRandomStrategy, nil
 	}
