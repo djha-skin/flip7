@@ -1,6 +1,10 @@
 package main
 
-import "math/rand"
+import (
+	"math"
+	"math/rand"
+	"slices"
+)
 
 // GameState provides context for AI decision making
 type GameState struct {
@@ -8,7 +12,7 @@ type GameState struct {
 	Players       []PlayerInterface
 	ActivePlayers []PlayerInterface
 	CurrentLeader PlayerInterface
-	CardsLeft     int
+	CardsInDeck   []*Card
 }
 
 type HitOrStayStrategy func(self PlayerInterface, gameState *GameState) bool
@@ -39,6 +43,11 @@ func (p *ComputerPlayer) GetPlayerIcon() string {
 }
 
 func (p *ComputerPlayer) MakeHitStayDecision(gameState *GameState) (bool, error) {
+	// Always hit if you have a second chance
+	if p.HasSecondChance() {
+		return true, nil
+	}
+
 	return p.HitOrStayStrategy(p, gameState), nil
 }
 
@@ -56,6 +65,35 @@ func PlayRoundTo(n int) HitOrStayStrategy {
 	}
 }
 
+func PlayToBustProbability(p float64) HitOrStayStrategy {
+	return func(self PlayerInterface, gameState *GameState) bool {
+		nBust := 0
+		nTotal := len(gameState.CardsInDeck)
+		numberCards := make([]int, 0)
+		for _, card := range self.GetHand() {
+			if card.Type == NumberCard {
+				numberCards = append(numberCards, card.Value)
+			}
+		}
+
+		for _, possibleCard := range gameState.CardsInDeck {
+			if possibleCard.Type == NumberCard {
+				if slices.Contains(numberCards, possibleCard.Value) {
+					nBust++
+				}
+			}
+		}
+
+		return float64(nBust)/float64(nTotal) < p
+	}
+}
+
+func HitUntilAheadBy(n int) HitOrStayStrategy {
+	return func(self PlayerInterface, gameState *GameState) bool {
+		return gameState.CurrentLeader.GetTotalScore()+gameState.CurrentLeader.CalculateRoundScore() < self.GetTotalScore()+self.CalculateRoundScore()+n
+	}
+}
+
 func AlwaysHitStrategy(self PlayerInterface, gameState *GameState) bool {
 	return true
 }
@@ -66,10 +104,13 @@ func RandomHitOrStayStrategy(self PlayerInterface, gameState *GameState) bool {
 
 func TargetLeaderStrategy(self PlayerInterface, gameState *GameState, actionType ActionType) PlayerInterface {
 	var leader PlayerInterface
-	for _, player := range gameState.Players {
-		if player.IsActive() && player != self {
-			if leader == nil || player.GetTotalScore()+player.CalculateRoundScore() > leader.GetTotalScore()+leader.CalculateRoundScore() {
+	leaderScore := 0
+	for _, player := range gameState.ActivePlayers {
+		if player != self {
+			playerScore := player.GetTotalScore() + player.CalculateRoundScore()
+			if playerScore > leaderScore {
 				leader = player
+				leaderScore = playerScore
 			}
 		}
 	}
@@ -84,10 +125,13 @@ func TargetLeaderStrategy(self PlayerInterface, gameState *GameState, actionType
 
 func TargetLastPlaceStrategy(self PlayerInterface, gameState *GameState, actionType ActionType) PlayerInterface {
 	var last PlayerInterface
-	for _, player := range gameState.Players {
-		if player.IsActive() && player != self {
-			if last == nil || player.GetTotalScore()+player.CalculateRoundScore() < last.GetTotalScore()+last.CalculateRoundScore() {
+	lastScore := math.MaxInt
+	for _, player := range gameState.ActivePlayers {
+		if player != self {
+			playerScore := player.GetTotalScore() + player.CalculateRoundScore()
+			if playerScore < lastScore {
 				last = player
+				lastScore = playerScore
 			}
 		}
 	}

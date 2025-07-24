@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -188,6 +189,11 @@ func (g *Game) dealInitialCards() error {
 	for i := 0; i < len(g.players); i++ {
 		playerIdx := (g.dealerIdx + 1 + i) % len(g.players)
 		player := g.players[playerIdx]
+
+		// Could have busted because of an action card
+		if !player.IsActive() {
+			continue
+		}
 
 		card := g.deck.DrawCard()
 		if card == nil {
@@ -502,6 +508,17 @@ func (g *Game) setupPlayers() error {
 	if numHumans == 0 {
 		fmt.Printf("\n🎮 Starting AI-only Flip 7 with %d computer players!\n", numComputers)
 		fmt.Println("🍿 Sit back and watch the AIs battle it out!")
+
+		// Ask for number of games to simulate
+		fmt.Printf("\nHow many games would you like to simulate? ")
+		numGames, err := g.getIntInput(1, math.MaxInt)
+		if err != nil {
+			return err
+		}
+
+		if numGames > 1 {
+			return g.runMultipleGames(numGames)
+		}
 	} else {
 		fmt.Printf("\n🎮 Starting Flip 7 with %d humans and %d computers!\n", numHumans, numComputers)
 	}
@@ -515,13 +532,21 @@ func (g *Game) getComputerPlayerSetup(computerNum int) (string, HitOrStayStrateg
 	fmt.Println("  1) Plays to 20")
 	fmt.Println("  2) Plays to 25")
 	fmt.Println("  3) Plays to 30")
-	fmt.Println("  4) FLIP 7")
-	fmt.Println("  5) Random")
-	fmt.Print("Enter choice (1-5): ")
+	fmt.Println("  4) Plays to 35")
+	fmt.Println("  5) Hit until ahead by 1")
+	fmt.Println("  6) Hit until ahead by 10")
+	fmt.Println("  7) Hit p(BUST) < 0.2")
+	fmt.Println("  8) Hit p(BUST) < 0.25")
+	fmt.Println("  9) Hit p(BUST) < 0.3")
+	fmt.Println("  10) Hit p(BUST) < 0.35")
+	fmt.Println("  11) Hit p(BUST) < 0.4")
+	fmt.Println("  12) FLIP 7")
+	fmt.Println("  13) Random")
+	fmt.Print("Enter choice (1-13): ")
 
-	choice, err := g.getIntInput(1, 5)
+	choice, err := g.getIntInput(1, 13)
 	if err != nil {
-		choice = 5
+		choice = 13
 	}
 
 	switch choice {
@@ -532,9 +557,23 @@ func (g *Game) getComputerPlayerSetup(computerNum int) (string, HitOrStayStrateg
 	case 3:
 		return "Plays to 30", PlayRoundTo(30), TargetLeaderStrategy, TargetLastPlaceStrategy, nil
 	case 4:
-		return "FLIP 7", AlwaysHitStrategy, TargetLeaderStrategy, TargetLastPlaceStrategy, nil
+		return "Plays to 35", PlayRoundTo(35), TargetLeaderStrategy, TargetLastPlaceStrategy, nil
 	case 5:
-		fallthrough
+		return "Until ahead by 1", HitUntilAheadBy(1), TargetLeaderStrategy, TargetLastPlaceStrategy, nil
+	case 6:
+		return "Until ahead by 10", HitUntilAheadBy(10), TargetLeaderStrategy, TargetLastPlaceStrategy, nil
+	case 7:
+		return "p(BUST) < 0.2", PlayToBustProbability(0.2), TargetLeaderStrategy, TargetLastPlaceStrategy, nil
+	case 8:
+		return "p(BUST) < 0.25", PlayToBustProbability(0.25), TargetLeaderStrategy, TargetLastPlaceStrategy, nil
+	case 9:
+		return "p(BUST) < 0.3", PlayToBustProbability(0.3), TargetLeaderStrategy, TargetLastPlaceStrategy, nil
+	case 10:
+		return "p(BUST) < 0.35", PlayToBustProbability(0.35), TargetLeaderStrategy, TargetLastPlaceStrategy, nil
+	case 11:
+		return "p(BUST) < 0.4", PlayToBustProbability(0.4), TargetLeaderStrategy, TargetLastPlaceStrategy, nil
+	case 12:
+		return "FLIP 7", AlwaysHitStrategy, TargetLeaderStrategy, TargetLastPlaceStrategy, nil
 	default:
 		return "Random", RandomHitOrStayStrategy, TargetRandomStrategy, TargetRandomStrategy, nil
 	}
@@ -553,7 +592,7 @@ func (g *Game) buildGameState() *GameState {
 	maxScore := -1
 	for _, p := range g.players {
 		if p.GetTotalScore() > maxScore {
-			maxScore = p.GetTotalScore()
+			maxScore = p.GetTotalScore() + p.CalculateRoundScore()
 			currentLeader = p
 		}
 	}
@@ -563,7 +602,7 @@ func (g *Game) buildGameState() *GameState {
 		Players:       g.players,
 		ActivePlayers: activePlayers,
 		CurrentLeader: currentLeader,
-		CardsLeft:     g.deck.CardsLeft(),
+		CardsInDeck:   g.deck.cards,
 	}
 }
 
@@ -575,4 +614,423 @@ func (g *Game) endRoundForFlip7(flip7Player PlayerInterface) {
 			player.CalculateRoundScore()
 		}
 	}
+}
+
+// runMultipleGames runs multiple AI-only games and tracks statistics
+func (g *Game) runMultipleGames(numGames int) error {
+	fmt.Printf("\n🎲 Running %d games for statistical analysis...\n", numGames)
+
+	// Track wins for each player
+	playerWins := make(map[string]int)
+	playerNames := make([]string, len(g.players))
+
+	// Initialize player names and win counters
+	for i, player := range g.players {
+		playerNames[i] = player.GetName()
+		playerWins[player.GetName()] = 0
+	}
+
+	// Run the games
+	for gameNum := 1; gameNum <= numGames; gameNum++ {
+		if gameNum%10 == 0 || gameNum == 1 {
+			fmt.Printf("⚡ Game %d/%d...\n", gameNum, numGames)
+		}
+
+		// Reset the game state
+		g.resetGameState()
+
+		// Run a single game
+		err := g.runSingleGame()
+		if err != nil {
+			return fmt.Errorf("error in game %d: %v", gameNum, err)
+		}
+
+		// Track the winner
+		winner := g.getWinner()
+		playerWins[winner.GetName()]++
+	}
+
+	// Display statistics
+	g.displayGameStatistics(numGames, playerWins, playerNames)
+	return nil
+}
+
+// resetGameState resets the game for a new game
+func (g *Game) resetGameState() {
+	g.round = 1
+	g.dealerIdx = 0
+
+	// Reset all players
+	for _, player := range g.players {
+		discardedCards := player.ResetForNewRound()
+		for _, card := range discardedCards {
+			g.deck.DiscardCard(card)
+		}
+		// Reset total score for new game
+		if basePlayer, ok := player.(*ComputerPlayer); ok {
+			basePlayer.TotalScore = 0
+		}
+	}
+
+	// Reset deck
+	g.deck = NewDeck()
+}
+
+// runSingleGame runs a single game without output (for simulation)
+func (g *Game) runSingleGame() error {
+	// Main game loop (silent version)
+	for !g.hasWinner() {
+		if err := g.playRoundSilent(); err != nil {
+			return err
+		}
+		g.nextRoundSilent()
+	}
+	return nil
+}
+
+// playRoundSilent plays a round without console output
+func (g *Game) playRoundSilent() error {
+	// Deal initial cards silently
+	if err := g.dealInitialCardsSilent(); err != nil {
+		return err
+	}
+
+	// Play turns silently
+	if err := g.playTurnsSilent(); err != nil {
+		return err
+	}
+
+	// Calculate scores silently
+	g.calculateRoundScoresSilent()
+	return nil
+}
+
+// dealInitialCardsSilent deals cards without output
+func (g *Game) dealInitialCardsSilent() error {
+	for i := 0; i < len(g.players); i++ {
+		playerIdx := (g.dealerIdx + 1 + i) % len(g.players)
+		player := g.players[playerIdx]
+
+		// Could have busted because of an action card
+		if !player.IsActive() {
+			continue
+		}
+
+		card := g.deck.DrawCard()
+		if card == nil {
+			return fmt.Errorf("deck is empty")
+		}
+
+		if card.IsActionCard() {
+			if err := g.handleActionCardSilent(player, card); err != nil {
+				return err
+			}
+		} else {
+			if err := player.AddCard(card); err != nil {
+				return g.handleCardAddErrorSilent(player, card, err)
+			}
+		}
+	}
+	return nil
+}
+
+// playTurnsSilent plays turns without output
+func (g *Game) playTurnsSilent() error {
+	for g.hasActivePlayers() {
+		for i := 0; i < len(g.players); i++ {
+			playerIdx := (g.dealerIdx + 1 + i) % len(g.players)
+			player := g.players[playerIdx]
+
+			if !player.IsActive() {
+				continue
+			}
+
+			if !player.HasCards() {
+				if err := g.playerHitSilent(player); err != nil {
+					return err
+				}
+				continue
+			}
+
+			gameState := g.buildGameState()
+			shouldHit, err := player.MakeHitStayDecision(gameState)
+			if err != nil {
+				return err
+			}
+
+			if shouldHit {
+				if err := g.playerHitSilent(player); err != nil {
+					return err
+				}
+			} else {
+				g.playerStaySilent(player)
+			}
+
+			if !g.hasActivePlayers() {
+				break
+			}
+		}
+	}
+	return nil
+}
+
+// playerHitSilent handles a player hit without output
+func (g *Game) playerHitSilent(player PlayerInterface) error {
+	card := g.deck.DrawCard()
+	if card == nil {
+		return fmt.Errorf("deck is empty")
+	}
+
+	if card.IsActionCard() {
+		return g.handleActionCardSilent(player, card)
+	}
+
+	if err := player.AddCard(card); err != nil {
+		return g.handleCardAddErrorSilent(player, card, err)
+	}
+	return nil
+}
+
+// playerStaySilent handles a player stay without output
+func (g *Game) playerStaySilent(player PlayerInterface) {
+	player.Stay()
+	player.CalculateRoundScore()
+}
+
+// handleActionCardSilent handles action cards without output
+func (g *Game) handleActionCardSilent(player PlayerInterface, card *Card) error {
+	switch card.Action {
+	case Freeze:
+		return g.handleFreezeCardSilent(player, card)
+	case FlipThree:
+		return g.handleFlipThreeCardSilent(player, card)
+	case SecondChance:
+		return g.handleSecondChanceCardSilent(player, card)
+	}
+	return nil
+}
+
+// handleFreezeCardSilent handles freeze cards without output
+func (g *Game) handleFreezeCardSilent(player PlayerInterface, card *Card) error {
+	gameState := g.buildGameState()
+	target, err := player.ChooseActionTarget(gameState, Freeze)
+	if err != nil {
+		g.deck.DiscardCard(card)
+		return err
+	}
+
+	if !target.IsActive() {
+		for _, p := range gameState.Players {
+			fmt.Printf("%+v\n", p)
+		}
+		panic(fmt.Sprintf("%s Chose inactive player %s, gameState: %+v", player.GetName(), target.GetName(), gameState))
+	}
+	target.Stay()
+	g.deck.DiscardCard(card)
+	return nil
+}
+
+// handleFlipThreeCardSilent handles flip three cards without output
+func (g *Game) handleFlipThreeCardSilent(player PlayerInterface, card *Card) error {
+	gameState := g.buildGameState()
+	target, err := player.ChooseActionTarget(gameState, FlipThree)
+	if err != nil {
+		g.deck.DiscardCard(card)
+		return err
+	}
+
+	for i := 0; i < 3; i++ {
+		if !target.IsActive() {
+			break
+		}
+
+		drawnCard := g.deck.DrawCard()
+		if drawnCard == nil {
+			break
+		}
+
+		if drawnCard.IsActionCard() {
+			if err := g.handleActionCardSilent(target, drawnCard); err != nil {
+				if strings.Contains(err.Error(), "flip7") {
+					g.endRoundForFlip7Silent(target)
+					break
+				}
+				g.deck.DiscardCard(drawnCard)
+				return err
+			}
+		} else {
+			if err := target.AddCard(drawnCard); err != nil {
+				if err := g.handleCardAddErrorSilent(target, drawnCard, err); err != nil {
+					return err
+				}
+				break
+			}
+		}
+	}
+
+	g.deck.DiscardCard(card)
+	return nil
+}
+
+// handleSecondChanceCardSilent handles second chance cards without output
+func (g *Game) handleSecondChanceCardSilent(player PlayerInterface, card *Card) error {
+	if !player.HasSecondChance() {
+		if err := player.AddCard(card); err != nil {
+			// Handle second_chance_duplicate error case
+			if strings.Contains(err.Error(), "second_chance_duplicate") {
+				g.deck.DiscardCard(card)
+				return nil // Just discard and continue
+			}
+			g.deck.DiscardCard(card)
+			return err
+		}
+		return nil
+	}
+
+	gameState := g.buildGameState()
+	target, err := player.ChoosePositiveActionTarget(gameState, SecondChance)
+	if err != nil {
+		g.deck.DiscardCard(card)
+		return nil // Don't propagate error, just discard card
+	}
+
+	if err := target.AddCard(card); err != nil {
+		// Handle second_chance_duplicate error case
+		if strings.Contains(err.Error(), "second_chance_duplicate") {
+			g.deck.DiscardCard(card)
+			return nil // Just discard and continue
+		}
+		g.deck.DiscardCard(card)
+		return err
+	}
+	return nil
+}
+
+// handleCardAddErrorSilent handles card add errors without output
+func (g *Game) handleCardAddErrorSilent(player PlayerInterface, card *Card, err error) error {
+	if strings.Contains(err.Error(), "flip7") {
+		g.endRoundForFlip7Silent(player)
+		return nil
+	}
+
+	if strings.Contains(err.Error(), "duplicate_with_second_chance") {
+		secondChanceCard := player.UseSecondChance()
+		g.deck.DiscardCard(secondChanceCard)
+		g.deck.DiscardCard(card)
+		return nil
+	}
+
+	if strings.Contains(err.Error(), "bust") {
+		g.deck.DiscardCard(card)
+		return nil
+	}
+
+	return err
+}
+
+// endRoundForFlip7Silent handles flip 7 without output
+func (g *Game) endRoundForFlip7Silent(flip7Player PlayerInterface) {
+	for _, player := range g.players {
+		if player != flip7Player && player.IsActive() {
+			player.Stay()
+			player.CalculateRoundScore()
+		}
+	}
+}
+
+// calculateRoundScoresSilent calculates scores without output
+func (g *Game) calculateRoundScoresSilent() {
+	for _, player := range g.players {
+		player.CalculateRoundScore()
+		player.AddToTotalScore()
+	}
+}
+
+// nextRoundSilent advances to next round without output
+func (g *Game) nextRoundSilent() {
+	g.round++
+	g.dealerIdx = (g.dealerIdx + 1) % len(g.players)
+
+	for _, player := range g.players {
+		discardedCards := player.ResetForNewRound()
+		for _, card := range discardedCards {
+			g.deck.DiscardCard(card)
+		}
+	}
+}
+
+// displayGameStatistics shows the final win-rate statistics
+func (g *Game) displayGameStatistics(numGames int, playerWins map[string]int, playerNames []string) {
+	fmt.Printf("\n" + strings.Repeat("=", 60) + "\n")
+	fmt.Printf("🏆 SIMULATION RESULTS - %d GAMES COMPLETED\n", numGames)
+	fmt.Printf(strings.Repeat("=", 60) + "\n")
+
+	// Sort players by win count (descending)
+	type playerStat struct {
+		name string
+		wins int
+		rate float64
+	}
+
+	var stats []playerStat
+	for _, name := range playerNames {
+		wins := playerWins[name]
+		rate := float64(wins) / float64(numGames) * 100
+		stats = append(stats, playerStat{name, wins, rate})
+	}
+
+	// Sort by wins (descending)
+	for i := 0; i < len(stats)-1; i++ {
+		for j := i + 1; j < len(stats); j++ {
+			if stats[j].wins > stats[i].wins {
+				stats[i], stats[j] = stats[j], stats[i]
+			}
+		}
+	}
+
+	// Display results
+	fmt.Printf("%-20s %8s %10s %12s\n", "PLAYER", "WINS", "WIN RATE", "PERFORMANCE")
+	fmt.Printf(strings.Repeat("-", 60) + "\n")
+
+	for i, stat := range stats {
+		var medal string
+		switch i {
+		case 0:
+			medal = "🥇"
+		case 1:
+			medal = "🥈"
+		case 2:
+			medal = "🥉"
+		default:
+			medal = "  "
+		}
+
+		var performance string
+		if stat.rate >= 50 {
+			performance = "🔥 DOMINANT"
+		} else if stat.rate >= 35 {
+			performance = "💪 STRONG"
+		} else if stat.rate >= 20 {
+			performance = "👍 DECENT"
+		} else {
+			performance = "😔 WEAK"
+		}
+
+		fmt.Printf("%-20s %8d %9.1f%% %12s %s\n",
+			stat.name, stat.wins, stat.rate, performance, medal)
+	}
+
+	fmt.Printf(strings.Repeat("-", 60) + "\n")
+	fmt.Printf("Total Games: %d\n", numGames)
+
+	// Additional statistics
+	winner := stats[0]
+	if len(stats) > 1 {
+		runnerUp := stats[1]
+		margin := winner.rate - runnerUp.rate
+		fmt.Printf("Victory Margin: %.1f%% (%s vs %s)\n",
+			margin, winner.name, runnerUp.name)
+	}
+
+	fmt.Printf(strings.Repeat("=", 60) + "\n")
 }

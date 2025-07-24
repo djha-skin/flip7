@@ -87,7 +87,7 @@ func (p *BasePlayer) AddCard(card *Card) error {
 				if p.HasSecondChance() {
 					return fmt.Errorf("duplicate_with_second_chance:%d", card.Value)
 				}
-				p.State = Busted
+				p.Bust()
 				return fmt.Errorf("bust:%d", card.Value)
 			}
 		}
@@ -95,7 +95,7 @@ func (p *BasePlayer) AddCard(card *Card) error {
 
 		// Check for Flip 7
 		if len(p.NumberCards) == 7 {
-			p.State = Stayed // Player automatically stays when achieving Flip 7
+			p.Stay()
 			return fmt.Errorf("flip7")
 		}
 
