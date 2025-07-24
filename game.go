@@ -135,12 +135,6 @@ func (g *Game) nextRound() {
 	for _, player := range g.players {
 		player.ResetForNewRound()
 	}
-
-	// Check if deck needs reshuffling
-	if g.deck.CardsLeft() < len(g.players)*5 {
-		fmt.Println("🔀 Reshuffling deck...")
-		g.deck.Reshuffle()
-	}
 }
 
 func (g *Game) playRound() error {
@@ -481,12 +475,12 @@ func (g *Game) setupPlayers() error {
 
 	// Setup computer players
 	for i := 0; i < numComputers; i++ {
-		strategy, name, err := g.getComputerPlayerSetup(i + 1)
+		name, strategy, actionTargetStrategy, positiveActionTargetStrategy, err := g.getComputerPlayerSetup(i + 1)
 		if err != nil {
 			return err
 		}
-		g.players = append(g.players, NewComputerPlayer(name, strategy))
-		fmt.Printf("  → Added: %s (%s AI)\n", name, g.players[len(g.players)-1].GetAIPersonalityName())
+		g.players = append(g.players, NewComputerPlayer(name, strategy, actionTargetStrategy, positiveActionTargetStrategy))
+		fmt.Printf("  → Added: %s (%s AI)\n", name, g.players[len(g.players)-1].GetName())
 	}
 
 	if numHumans == 0 {
@@ -499,7 +493,7 @@ func (g *Game) setupPlayers() error {
 }
 
 // getComputerPlayerSetup handles setup for a single computer player
-func (g *Game) getComputerPlayerSetup(computerNum int) (string, HitOrStayStrategy, ActionTargetStrategy, error) {
+func (g *Game) getComputerPlayerSetup(computerNum int) (string, HitOrStayStrategy, ActionTargetStrategy, ActionTargetStrategy, error) {
 	fmt.Printf("\nComputer Player %d:\n", computerNum)
 	fmt.Println("Choose AI strategy:")
 	fmt.Println("  1) Plays to 20")
@@ -511,22 +505,22 @@ func (g *Game) getComputerPlayerSetup(computerNum int) (string, HitOrStayStrateg
 
 	choice, err := g.getIntInput(1, 5)
 	if err != nil {
-		return "Random", nil, nil, err
+		choice = 5
 	}
 
 	switch choice {
 	case 1:
-		return "Plays to 20", nil, nil, nil
+		return "Plays to 20", PlayRoundTo(20), TargetLeaderStrategy, TargetLastPlaceStrategy, nil
 	case 2:
-		return "Plays to 25", nil, nil, nil
+		return "Plays to 25", PlayRoundTo(25), TargetLeaderStrategy, TargetLastPlaceStrategy, nil
 	case 3:
-		return "Plays to 30", nil, nil, nil
+		return "Plays to 30", PlayRoundTo(30), TargetLeaderStrategy, TargetLastPlaceStrategy, nil
 	case 4:
-		return "FLIP 7", nil, nil, nil
+		return "FLIP 7", AlwaysHitStrategy, TargetLeaderStrategy, TargetLastPlaceStrategy, nil
 	case 5:
-		return "Random", nil, nil, nil
+		fallthrough
 	default:
-		return "Random", nil, nil, nil
+		return "Random", RandomHitOrStayStrategy, TargetRandomStrategy, TargetRandomStrategy, nil
 	}
 }
 
@@ -539,11 +533,11 @@ func (g *Game) buildGameState() *GameState {
 		}
 	}
 
-	var currentLeader *Player
+	var currentLeader PlayerInterface
 	maxScore := -1
 	for _, p := range g.players {
-		if p.TotalScore > maxScore {
-			maxScore = p.TotalScore
+		if p.GetTotalScore() > maxScore {
+			maxScore = p.GetTotalScore()
 			currentLeader = p
 		}
 	}
@@ -558,7 +552,7 @@ func (g *Game) buildGameState() *GameState {
 }
 
 // endRoundForFlip7 marks all players except the Flip 7 achiever as non-active
-func (g *Game) endRoundForFlip7(flip7Player *Player) {
+func (g *Game) endRoundForFlip7(flip7Player PlayerInterface) {
 	for _, player := range g.players {
 		if player != flip7Player && player.IsActive() {
 			player.Stay()

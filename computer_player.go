@@ -16,20 +16,38 @@ type ActionTargetStrategy func(self PlayerInterface, gameState *GameState, actio
 
 type ComputerPlayer struct {
 	BasePlayer
-	HitOrStayStrategy    HitOrStayStrategy
-	ActionTargetStrategy ActionTargetStrategy
+	HitOrStayStrategy            HitOrStayStrategy
+	ActionTargetStrategy         ActionTargetStrategy
+	PositiveActionTargetStrategy ActionTargetStrategy
 }
 
 // NewComputerPlayer creates a new computer player with specified strategy
-func NewComputerPlayer(name string, strategy HitOrStayStrategy, actionTargetStrategy ActionTargetStrategy) *ComputerPlayer {
+func NewComputerPlayer(name string, strategy HitOrStayStrategy, actionTargetStrategy ActionTargetStrategy, positiveActionTargetStrategy ActionTargetStrategy) *ComputerPlayer {
 	p := &ComputerPlayer{
-		HitOrStayStrategy:    strategy,
-		ActionTargetStrategy: actionTargetStrategy,
+		HitOrStayStrategy:            strategy,
+		ActionTargetStrategy:         actionTargetStrategy,
+		PositiveActionTargetStrategy: positiveActionTargetStrategy,
 	}
 
 	p.BasePlayer.Init(name)
 
 	return p
+}
+
+func (p *ComputerPlayer) GetPlayerIcon() string {
+	return "🤖"
+}
+
+func (p *ComputerPlayer) MakeHitStayDecision(gameState *GameState) (bool, error) {
+	return p.HitOrStayStrategy(p, gameState), nil
+}
+
+func (p *ComputerPlayer) ChooseActionTarget(gameState *GameState, actionType ActionType) (PlayerInterface, error) {
+	return p.ActionTargetStrategy(p, gameState, actionType), nil
+}
+
+func (p *ComputerPlayer) ChoosePositiveActionTarget(gameState *GameState, actionType ActionType) (PlayerInterface, error) {
+	return p.PositiveActionTargetStrategy(p, gameState, actionType), nil
 }
 
 func PlayRoundTo(n int) HitOrStayStrategy {
@@ -46,7 +64,7 @@ func RandomHitOrStayStrategy(self PlayerInterface, gameState *GameState) bool {
 	return rand.Intn(2) == 0
 }
 
-func TargetLeaderStrategy(self PlayerInterface, gameState *GameState) PlayerInterface {
+func TargetLeaderStrategy(self PlayerInterface, gameState *GameState, actionType ActionType) PlayerInterface {
 	var leader PlayerInterface
 	for _, player := range gameState.Players {
 		if player.IsActive() && player != self {
@@ -64,7 +82,7 @@ func TargetLeaderStrategy(self PlayerInterface, gameState *GameState) PlayerInte
 	return leader
 }
 
-func TargetLastPlaceStrategy(self PlayerInterface, gameState *GameState) PlayerInterface {
+func TargetLastPlaceStrategy(self PlayerInterface, gameState *GameState, actionType ActionType) PlayerInterface {
 	var last PlayerInterface
 	for _, player := range gameState.Players {
 		if player.IsActive() && player != self {
@@ -82,7 +100,7 @@ func TargetLastPlaceStrategy(self PlayerInterface, gameState *GameState) PlayerI
 	return last
 }
 
-func TargetRandomStrategy(self PlayerInterface, gameState *GameState) PlayerInterface {
+func TargetRandomStrategy(self PlayerInterface, gameState *GameState, actionType ActionType) PlayerInterface {
 	activePlayers := make([]PlayerInterface, 0)
 	for _, player := range gameState.Players {
 		if player.IsActive() && player != self {

@@ -72,7 +72,11 @@ func (d *Deck) Shuffle() {
 // DrawCard draws the top card from the deck
 func (d *Deck) DrawCard() *Card {
 	if len(d.cards) == 0 {
-		return nil
+		d.Reshuffle()
+		if len(d.cards) == 0 {
+			panic("All cards disappeared!	")
+		}
+
 	}
 
 	if d.debugMode {
