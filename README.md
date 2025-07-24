@@ -68,6 +68,11 @@ go run .
 go run . -debug
 ```
 
+### Game Modes
+- **Mixed Mode**: Human and computer players together
+- **AI-Only Mode**: Watch computer players battle (0 human players)
+- **Debug Mode**: Manually choose every card drawn
+
 ## 🎮 Gameplay Example
 
 ```
@@ -182,6 +187,37 @@ Modifier Cards:
 Enter choice (1-22): 
 ```
 
+## 🤖 Computer Players
+
+The game supports computer players with different AI strategies:
+
+### AI Strategies
+- **Conservative**: Plays it safe, stays early with lower scores
+- **Aggressive**: Takes big risks, pushes for higher scores
+- **Adaptive**: Adjusts strategy based on game state and other players
+- **Chaotic**: Unpredictable decisions for fun and variety
+
+### AI-Only Mode
+You can create games with zero human players to:
+- Test different AI strategies against each other
+- Watch entertaining computer battles
+- Study optimal play patterns
+- Let the game run hands-free
+
+**Example AI-only setup:**
+```
+How many players total? (2-8): 4
+How many human players? (0-4): 0
+
+Computer Player 1: Conservative → "Cautious Carl"
+Computer Player 2: Aggressive → "Bold Bob" 
+Computer Player 3: Adaptive → "Smart Sam"
+Computer Player 4: Chaotic → "Wild Will"
+
+🎮 Starting AI-only Flip 7 with 4 computer players!
+🍿 Sit back and watch the AIs battle it out!
+```
+
 ### Key Features Implemented
 - ✅ Full Flip 7 rules implementation
 - ✅ All 3 action card types with proper interactions
@@ -191,6 +227,9 @@ Enter choice (1-22):
 - ✅ Input validation and error handling
 - ✅ Visual game state display
 - ✅ Winner detection
+- ✅ Computer players with AI strategies
+- ✅ AI-only mode (watch computers play)
+- ✅ Debug mode for manual card selection
 
 ## 📄 License
 

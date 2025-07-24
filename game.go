@@ -37,20 +37,9 @@ func (g *Game) SetDebugMode(debug bool) {
 
 // Run starts the main game loop
 func (g *Game) Run() error {
-	fmt.Println("How many players? (3-8): ")
-	numPlayers, err := g.getIntInput(3, 8)
-	if err != nil {
+	// Setup players
+	if err := g.setupPlayers(); err != nil {
 		return err
-	}
-
-	// Initialize players
-	for i := 0; i < numPlayers; i++ {
-		fmt.Printf("Enter name for Player %d: ", i+1)
-		name, err := g.getStringInput()
-		if err != nil {
-			return err
-		}
-		g.players = append(g.players, NewPlayer(name))
 	}
 
 	fmt.Println("\n🎮 Starting Flip 7! First to 200 points wins!")
@@ -130,11 +119,15 @@ func (g *Game) getWinner() *Player {
 
 func (g *Game) showScores() {
 	fmt.Println("\n📊 Current Scores:")
-	fmt.Println(strings.Repeat("-", 30))
+	fmt.Println(strings.Repeat("-", 40))
 	for _, player := range g.players {
-		fmt.Printf("%-15s: %3d points\n", player.Name, player.TotalScore)
+		icon := "👤"
+		if player.IsComputer() {
+			icon = "🤖"
+		}
+		fmt.Printf("%s %-20s: %3d points\n", icon, player.Name, player.TotalScore)
 	}
-	fmt.Println(strings.Repeat("-", 30))
+	fmt.Println(strings.Repeat("-", 40))
 }
 
 func (g *Game) nextRound() {
@@ -279,8 +272,32 @@ func (g *Game) showAllHands() {
 
 func (g *Game) getPlayerChoice(player *Player) (string, error) {
 	player.ShowHand()
-	fmt.Printf("🎯 %s, do you want to (H)it or (S)tay? ", player.Name)
 
+	if player.IsComputer() {
+		// AI decision making
+		gameState := g.buildGameState()
+		shouldHit := player.ShouldHit(gameState)
+
+		fmt.Printf("🤖 %s (%s AI) is thinking", player.Name, player.GetAIPersonalityName())
+
+		// Add some drama with thinking dots
+		for i := 0; i < 3; i++ {
+			fmt.Print(".")
+			// In a real implementation, you might add a small delay here
+			// time.Sleep(500 * time.Millisecond)
+		}
+
+		if shouldHit {
+			fmt.Println(" decides to HIT!")
+			return "h", nil
+		} else {
+			fmt.Println(" decides to STAY!")
+			return "s", nil
+		}
+	}
+
+	// Human player input
+	fmt.Printf("🎯 %s, do you want to (H)it or (S)tay? ", player.Name)
 	for {
 		choice, err := g.getStringInput()
 		if err != nil {
@@ -340,7 +357,7 @@ func (g *Game) handleActionCard(player *Player, card *Card) error {
 }
 
 func (g *Game) handleFreezeCard(player *Player, card *Card) error {
-	target, err := g.chooseActionTarget(player, "Who should be frozen?")
+	target, err := g.chooseActionTarget(player, "Who should be frozen?", Freeze)
 	if err != nil {
 		return err
 	}
@@ -354,7 +371,7 @@ func (g *Game) handleFreezeCard(player *Player, card *Card) error {
 }
 
 func (g *Game) handleFlipThreeCard(player *Player, card *Card) error {
-	target, err := g.chooseActionTarget(player, "Who should flip three cards?")
+	target, err := g.chooseActionTarget(player, "Who should flip three cards?", FlipThree)
 	if err != nil {
 		return err
 	}
@@ -410,7 +427,7 @@ func (g *Game) handleSecondChanceCard(player *Player, card *Card) error {
 	// Player already has second chance, need to give it to someone else
 	fmt.Printf("   🆘 %s already has Second Chance, must give to another player\n", player.Name)
 
-	target, err := g.chooseActionTarget(player, "Who should get the Second Chance card?")
+	target, err := g.chooseActionTarget(player, "Who should get the Second Chance card?", SecondChance)
 	if err != nil {
 		return err
 	}
@@ -435,7 +452,7 @@ func (g *Game) handleSecondChanceCard(player *Player, card *Card) error {
 	return nil
 }
 
-func (g *Game) chooseActionTarget(player *Player, prompt string) (*Player, error) {
+func (g *Game) chooseActionTarget(player *Player, prompt string, actionType ActionType) (*Player, error) {
 	activePlayers := make([]*Player, 0)
 	for _, p := range g.players {
 		if p.IsActive() {
@@ -451,9 +468,29 @@ func (g *Game) chooseActionTarget(player *Player, prompt string) (*Player, error
 		return activePlayers[0], nil
 	}
 
+	if player.IsComputer() {
+		// AI target selection
+		gameState := g.buildGameState()
+		target := player.ChooseActionTarget(g.players, actionType, gameState)
+
+		if target != nil {
+			fmt.Printf("   🤖 %s (%s AI) chooses %s\n", player.Name, player.GetAIPersonalityName(), target.Name)
+			return target, nil
+		}
+
+		// Fallback to first active player if AI returns nil
+		fmt.Printf("   🤖 %s (%s AI) chooses %s (default)\n", player.Name, player.GetAIPersonalityName(), activePlayers[0].Name)
+		return activePlayers[0], nil
+	}
+
+	// Human player input
 	fmt.Printf("   %s\n", prompt)
 	for i, p := range activePlayers {
-		fmt.Printf("   %d) %s\n", i+1, p.Name)
+		playerType := ""
+		if p.IsComputer() {
+			playerType = fmt.Sprintf(" (%s AI)", p.GetAIPersonalityName())
+		}
+		fmt.Printf("   %d) %s%s\n", i+1, p.Name, playerType)
 	}
 
 	choice, err := g.getIntInput(1, len(activePlayers))
@@ -477,14 +514,23 @@ func (g *Game) handleCardAddError(player *Player, card *Card, err error) error {
 		if len(parts) > 1 {
 			duplicateValue := parts[1]
 			fmt.Printf("   💥 %s drew a duplicate %s but has Second Chance!\n", player.Name, duplicateValue)
-			fmt.Print("   Use Second Chance? (y/n): ")
 
-			choice, err := g.getStringInput()
-			if err != nil {
-				return err
+			var useSecondChance bool
+			if player.IsComputer() {
+				// AI decision: generally should use Second Chance to avoid busting
+				useSecondChance = true
+				fmt.Printf("   🤖 %s (%s AI) decides to use Second Chance!\n", player.Name, player.GetAIPersonalityName())
+			} else {
+				// Human player input
+				fmt.Print("   Use Second Chance? (y/n): ")
+				choice, err := g.getStringInput()
+				if err != nil {
+					return err
+				}
+				useSecondChance = strings.ToLower(strings.TrimSpace(choice)) == "y"
 			}
 
-			if strings.ToLower(strings.TrimSpace(choice)) == "y" {
+			if useSecondChance {
 				if value, parseErr := strconv.Atoi(duplicateValue); parseErr == nil {
 					player.UseSecondChance(value)
 					fmt.Printf("   🆘 %s used Second Chance to avoid busting!\n", player.Name)
@@ -506,6 +552,141 @@ func (g *Game) handleCardAddError(player *Player, card *Card, err error) error {
 	}
 
 	return err
+}
+
+// setupPlayers handles the initial player setup (human vs computer)
+func (g *Game) setupPlayers() error {
+	fmt.Println("How many players total? (2-8): ")
+	numPlayers, err := g.getIntInput(2, 8)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("How many human players? (0-%d): ", numPlayers)
+	numHumans, err := g.getIntInput(0, numPlayers)
+	if err != nil {
+		return err
+	}
+
+	numComputers := numPlayers - numHumans
+
+	// Setup human players
+	for i := 0; i < numHumans; i++ {
+		fmt.Printf("Enter name for Human Player %d: ", i+1)
+		name, err := g.getStringInput()
+		if err != nil {
+			return err
+		}
+		g.players = append(g.players, NewPlayer(name))
+	}
+
+	// Setup computer players
+	for i := 0; i < numComputers; i++ {
+		strategy, name, err := g.getComputerPlayerSetup(i + 1)
+		if err != nil {
+			return err
+		}
+		g.players = append(g.players, NewComputerPlayer(name, strategy))
+		fmt.Printf("  → Added: %s (%s AI)\n", name, g.players[len(g.players)-1].GetAIPersonalityName())
+	}
+
+	if numHumans == 0 {
+		fmt.Printf("\n🎮 Starting AI-only Flip 7 with %d computer players!\n", numComputers)
+		fmt.Println("🍿 Sit back and watch the AIs battle it out!")
+	} else {
+		fmt.Printf("\n🎮 Starting Flip 7 with %d humans and %d computers!\n", numHumans, numComputers)
+	}
+	return nil
+}
+
+// getComputerPlayerSetup handles setup for a single computer player
+func (g *Game) getComputerPlayerSetup(computerNum int) (AIStrategy, string, error) {
+	fmt.Printf("\nComputer Player %d:\n", computerNum)
+	fmt.Println("Choose AI strategy:")
+	fmt.Println("  1) Conservative (plays it safe)")
+	fmt.Println("  2) Aggressive (takes big risks)")
+	fmt.Println("  3) Adaptive (adjusts to game state)")
+	fmt.Println("  4) Chaotic (unpredictable)")
+	fmt.Print("Enter choice (1-4): ")
+
+	choice, err := g.getIntInput(1, 4)
+	if err != nil {
+		return Conservative, "", err
+	}
+
+	strategy := AIStrategy(choice - 1)
+
+	// Generate a name or let user customize
+	fmt.Print("Use default name? (y/n): ")
+	useDefault, err := g.getStringInput()
+	if err != nil {
+		return strategy, "", err
+	}
+
+	var name string
+	if strings.ToLower(strings.TrimSpace(useDefault)) == "y" {
+		name = g.generateComputerName(strategy, computerNum)
+	} else {
+		fmt.Print("Enter custom name: ")
+		name, err = g.getStringInput()
+		if err != nil {
+			return strategy, "", err
+		}
+	}
+
+	return strategy, name, nil
+}
+
+// generateComputerName creates a default name for computer players
+func (g *Game) generateComputerName(strategy AIStrategy, num int) string {
+	baseNames := map[AIStrategy][]string{
+		Conservative: {"Cautious Carl", "Safe Sally", "Prudent Pete", "Careful Claire"},
+		Aggressive:   {"Risky Rita", "Bold Bob", "Daring Dave", "Fearless Fiona"},
+		Adaptive:     {"Smart Sam", "Clever Cathy", "Tactical Tom", "Strategic Sue"},
+		Chaotic:      {"Wild Will", "Crazy Kate", "Random Rick", "Chaotic Charlie"},
+	}
+
+	names := baseNames[strategy]
+	if num-1 < len(names) {
+		return names[num-1]
+	}
+
+	// Fallback for additional computer players
+	prefix := map[AIStrategy]string{
+		Conservative: "Cautious",
+		Aggressive:   "Risky",
+		Adaptive:     "Smart",
+		Chaotic:      "Wild",
+	}[strategy]
+
+	return fmt.Sprintf("%s Bot %d", prefix, num)
+}
+
+// buildGameState creates a GameState for AI decision making
+func (g *Game) buildGameState() *GameState {
+	activePlayers := make([]*Player, 0)
+	for _, p := range g.players {
+		if p.IsActive() {
+			activePlayers = append(activePlayers, p)
+		}
+	}
+
+	var currentLeader *Player
+	maxScore := -1
+	for _, p := range g.players {
+		if p.TotalScore > maxScore {
+			maxScore = p.TotalScore
+			currentLeader = p
+		}
+	}
+
+	return &GameState{
+		Round:         g.round,
+		Players:       g.players,
+		ActivePlayers: activePlayers,
+		CurrentLeader: currentLeader,
+		CardsLeft:     g.deck.CardsLeft(),
+	}
 }
 
 // endRoundForFlip7 marks all players except the Flip 7 achiever as non-active

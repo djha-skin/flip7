@@ -14,9 +14,29 @@ const (
 	Busted
 )
 
+// PlayerType represents whether a player is human or computer
+type PlayerType int
+
+const (
+	Human PlayerType = iota
+	Computer
+)
+
+// AIStrategy represents different AI playing strategies
+type AIStrategy int
+
+const (
+	Conservative AIStrategy = iota // Plays it safe, stays early
+	Aggressive                     // Pushes luck for high scores
+	Adaptive                       // Changes based on game state
+	Chaotic                        // Unpredictable/fun decisions
+)
+
 // Player represents a game player
 type Player struct {
 	Name            string
+	PlayerType      PlayerType
+	AIStrategy      AIStrategy
 	TotalScore      int
 	RoundScore      int
 	NumberCards     []*Card
@@ -26,10 +46,12 @@ type Player struct {
 	HasSecondChance bool
 }
 
-// NewPlayer creates a new player
+// NewPlayer creates a new human player
 func NewPlayer(name string) *Player {
 	return &Player{
 		Name:            name,
+		PlayerType:      Human,
+		AIStrategy:      Conservative, // Not used for human players
 		TotalScore:      0,
 		RoundScore:      0,
 		NumberCards:     make([]*Card, 0),
@@ -38,6 +60,32 @@ func NewPlayer(name string) *Player {
 		State:           Active,
 		HasSecondChance: false,
 	}
+}
+
+// NewComputerPlayer creates a new computer player with specified strategy
+func NewComputerPlayer(name string, strategy AIStrategy) *Player {
+	return &Player{
+		Name:            name,
+		PlayerType:      Computer,
+		AIStrategy:      strategy,
+		TotalScore:      0,
+		RoundScore:      0,
+		NumberCards:     make([]*Card, 0),
+		ModifierCards:   make([]*Card, 0),
+		ActionCards:     make([]*Card, 0),
+		State:           Active,
+		HasSecondChance: false,
+	}
+}
+
+// IsComputer returns true if this is a computer player
+func (p *Player) IsComputer() bool {
+	return p.PlayerType == Computer
+}
+
+// IsHuman returns true if this is a human player
+func (p *Player) IsHuman() bool {
+	return p.PlayerType == Human
 }
 
 // AddCard adds a card to the player's hand
@@ -178,7 +226,15 @@ func (p *Player) HasCards() bool {
 
 // ShowHand displays the player's current hand
 func (p *Player) ShowHand() {
-	fmt.Printf("👤 %s:\n", p.Name)
+	playerIcon := "👤"
+	playerLabel := p.Name
+
+	if p.IsComputer() {
+		playerIcon = "🤖"
+		playerLabel = fmt.Sprintf("%s (%s AI)", p.Name, p.GetAIPersonalityName())
+	}
+
+	fmt.Printf("%s %s:\n", playerIcon, playerLabel)
 
 	if len(p.NumberCards) == 0 && len(p.ModifierCards) == 0 {
 		fmt.Println("   No cards")
@@ -260,4 +316,138 @@ func (p *Player) GetHandSummary() string {
 	}
 
 	return result
+}
+
+// AI Decision Methods - Implement these with your own strategies!
+
+// ShouldHit decides whether the AI player should hit or stay
+// Returns true to hit, false to stay
+// You can implement different strategies based on p.AIStrategy
+func (p *Player) ShouldHit(gameState *GameState) bool {
+	if p.IsHuman() {
+		return false // This should not be called for human players
+	}
+
+	// TODO: Implement your AI logic here based on p.AIStrategy
+	// For now, just a simple placeholder:
+	currentScore := 0
+	for _, card := range p.NumberCards {
+		currentScore += card.Value
+	}
+
+	// Very basic logic - you should replace this
+	switch p.AIStrategy {
+	case Conservative:
+		return currentScore < 12 // Stay safe
+	case Aggressive:
+		return currentScore < 20 // Push harder
+	case Adaptive:
+		return currentScore < 15 // Balanced
+	case Chaotic:
+		return currentScore < 18 // Unpredictable
+	default:
+		return currentScore < 15
+	}
+}
+
+// ChooseActionTarget selects a target player for action cards
+// Returns the target player, or nil if no valid target
+// You can implement different targeting strategies based on p.AIStrategy
+func (p *Player) ChooseActionTarget(players []*Player, actionType ActionType, gameState *GameState) *Player {
+	if p.IsHuman() {
+		return nil // This should not be called for human players
+	}
+
+	activePlayers := make([]*Player, 0)
+	for _, player := range players {
+		if player.IsActive() {
+			activePlayers = append(activePlayers, player)
+		}
+	}
+
+	if len(activePlayers) == 0 {
+		return nil
+	}
+
+	if len(activePlayers) == 1 {
+		return activePlayers[0]
+	}
+
+	// TODO: Implement your AI targeting logic here based on p.AIStrategy and actionType
+	// For now, just basic placeholder logic:
+
+	switch actionType {
+	case Freeze:
+		// Try to freeze the player with the highest current round score
+		var target *Player
+		maxScore := -1
+		for _, player := range activePlayers {
+			roundScore := 0
+			for _, card := range player.NumberCards {
+				roundScore += card.Value
+			}
+			if roundScore > maxScore {
+				maxScore = roundScore
+				target = player
+			}
+		}
+		return target
+
+	case FlipThree:
+		// Choose based on strategy - you can implement different logic
+		switch p.AIStrategy {
+		case Conservative:
+			return p // Conservative AI might use it on themselves
+		case Aggressive:
+			// Target player with lowest score to help them catch up (chaos)
+			var target *Player
+			minTotal := 999
+			for _, player := range activePlayers {
+				if player.TotalScore < minTotal {
+					minTotal = player.TotalScore
+					target = player
+				}
+			}
+			return target
+		default:
+			return activePlayers[0] // Default to first active player
+		}
+
+	case SecondChance:
+		// Usually give to the player who needs it most
+		// You can implement more sophisticated logic
+		return activePlayers[0]
+
+	default:
+		return activePlayers[0]
+	}
+}
+
+// GetAIPersonalityName returns a friendly name for the AI personality
+func (p *Player) GetAIPersonalityName() string {
+	if p.IsHuman() {
+		return ""
+	}
+
+	switch p.AIStrategy {
+	case Conservative:
+		return "Cautious"
+	case Aggressive:
+		return "Risky"
+	case Adaptive:
+		return "Smart"
+	case Chaotic:
+		return "Wild"
+	default:
+		return "Basic"
+	}
+}
+
+// GameState provides context for AI decision making
+type GameState struct {
+	Round         int
+	Players       []*Player
+	ActivePlayers []*Player
+	CurrentLeader *Player
+	CardsLeft     int
 }
