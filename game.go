@@ -122,7 +122,7 @@ func (g *Game) showScores() {
 	fmt.Println(strings.Repeat("-", 40))
 	for _, player := range g.players {
 		icon := "👤"
-		if player.IsComputer() {
+		if player.PlayerType == Computer {
 			icon = "🤖"
 		}
 		fmt.Printf("%s %-20s: %3d points\n", icon, player.Name, player.TotalScore)
@@ -271,48 +271,16 @@ func (g *Game) showAllHands() {
 }
 
 func (g *Game) getPlayerChoice(player *Player) (string, error) {
-	player.ShowHand()
-
-	if player.IsComputer() {
-		// AI decision making
-		gameState := g.buildGameState()
-		shouldHit := player.ShouldHit(gameState)
-
-		fmt.Printf("🤖 %s (%s AI) is thinking", player.Name, player.GetAIPersonalityName())
-
-		// Add some drama with thinking dots
-		for i := 0; i < 3; i++ {
-			fmt.Print(".")
-			// In a real implementation, you might add a small delay here
-			// time.Sleep(500 * time.Millisecond)
-		}
-
-		if shouldHit {
-			fmt.Println(" decides to HIT!")
-			return "h", nil
-		} else {
-			fmt.Println(" decides to STAY!")
-			return "s", nil
-		}
+	gameState := g.buildGameState()
+	shouldHit, err := player.MakeHitStayDecision(gameState, g.scanner)
+	if err != nil {
+		return "", err
 	}
 
-	// Human player input
-	fmt.Printf("🎯 %s, do you want to (H)it or (S)tay? ", player.Name)
-	for {
-		choice, err := g.getStringInput()
-		if err != nil {
-			return "", err
-		}
-
-		choice = strings.ToLower(strings.TrimSpace(choice))
-		if choice == "h" || choice == "hit" {
-			return "h", nil
-		}
-		if choice == "s" || choice == "stay" {
-			return "s", nil
-		}
-
-		fmt.Print("Please enter 'H' for Hit or 'S' for Stay: ")
+	if shouldHit {
+		return "h", nil
+	} else {
+		return "s", nil
 	}
 }
 
@@ -453,52 +421,8 @@ func (g *Game) handleSecondChanceCard(player *Player, card *Card) error {
 }
 
 func (g *Game) chooseActionTarget(player *Player, prompt string, actionType ActionType) (*Player, error) {
-	activePlayers := make([]*Player, 0)
-	for _, p := range g.players {
-		if p.IsActive() {
-			activePlayers = append(activePlayers, p)
-		}
-	}
-
-	if len(activePlayers) == 0 {
-		return nil, fmt.Errorf("no active players")
-	}
-
-	if len(activePlayers) == 1 {
-		return activePlayers[0], nil
-	}
-
-	if player.IsComputer() {
-		// AI target selection
-		gameState := g.buildGameState()
-		target := player.ChooseActionTarget(g.players, actionType, gameState)
-
-		if target != nil {
-			fmt.Printf("   🤖 %s (%s AI) chooses %s\n", player.Name, player.GetAIPersonalityName(), target.Name)
-			return target, nil
-		}
-
-		// Fallback to first active player if AI returns nil
-		fmt.Printf("   🤖 %s (%s AI) chooses %s (default)\n", player.Name, player.GetAIPersonalityName(), activePlayers[0].Name)
-		return activePlayers[0], nil
-	}
-
-	// Human player input
-	fmt.Printf("   %s\n", prompt)
-	for i, p := range activePlayers {
-		playerType := ""
-		if p.IsComputer() {
-			playerType = fmt.Sprintf(" (%s AI)", p.GetAIPersonalityName())
-		}
-		fmt.Printf("   %d) %s%s\n", i+1, p.Name, playerType)
-	}
-
-	choice, err := g.getIntInput(1, len(activePlayers))
-	if err != nil {
-		return nil, err
-	}
-
-	return activePlayers[choice-1], nil
+	gameState := g.buildGameState()
+	return player.ChooseActionTargetInternal(g.players, actionType, gameState, g.scanner)
 }
 
 func (g *Game) handleCardAddError(player *Player, card *Card, err error) error {
@@ -515,23 +439,10 @@ func (g *Game) handleCardAddError(player *Player, card *Card, err error) error {
 			duplicateValue := parts[1]
 			fmt.Printf("   💥 %s drew a duplicate %s but has Second Chance!\n", player.Name, duplicateValue)
 
-			var useSecondChance bool
-			if player.IsComputer() {
-				// AI decision: generally should use Second Chance to avoid busting
-				useSecondChance = true
-				fmt.Printf("   🤖 %s (%s AI) decides to use Second Chance!\n", player.Name, player.GetAIPersonalityName())
-			} else {
-				// Human player input
-				fmt.Print("   Use Second Chance? (y/n): ")
-				choice, err := g.getStringInput()
-				if err != nil {
-					return err
-				}
-				useSecondChance = strings.ToLower(strings.TrimSpace(choice)) == "y"
-			}
+			if value, parseErr := strconv.Atoi(duplicateValue); parseErr == nil {
+				useSecondChance := player.DecideSecondChanceUsageInternal(value, g.scanner)
 
-			if useSecondChance {
-				if value, parseErr := strconv.Atoi(duplicateValue); parseErr == nil {
+				if useSecondChance {
 					player.UseSecondChance(value)
 					fmt.Printf("   🆘 %s used Second Chance to avoid busting!\n", player.Name)
 					g.deck.DiscardCard(card) // Discard the duplicate
@@ -577,7 +488,7 @@ func (g *Game) setupPlayers() error {
 		if err != nil {
 			return err
 		}
-		g.players = append(g.players, NewPlayer(name))
+		g.players = append(g.players, NewHumanPlayer(name, g.scanner))
 	}
 
 	// Setup computer players

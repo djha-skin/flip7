@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -46,8 +48,8 @@ type Player struct {
 	HasSecondChance bool
 }
 
-// NewPlayer creates a new human player
-func NewPlayer(name string) *Player {
+// NewHumanPlayer creates a new human player
+func NewHumanPlayer(name string, scanner *bufio.Scanner) *Player {
 	return &Player{
 		Name:            name,
 		PlayerType:      Human,
@@ -78,12 +80,12 @@ func NewComputerPlayer(name string, strategy AIStrategy) *Player {
 	}
 }
 
-// IsComputer returns true if this is a computer player
+// IsComputer returns true if this is a computer player (kept for backwards compatibility)
 func (p *Player) IsComputer() bool {
 	return p.PlayerType == Computer
 }
 
-// IsHuman returns true if this is a human player
+// IsHuman returns true if this is a human player (kept for backwards compatibility)
 func (p *Player) IsHuman() bool {
 	return p.PlayerType == Human
 }
@@ -316,6 +318,150 @@ func (p *Player) GetHandSummary() string {
 	}
 
 	return result
+}
+
+// Decision Methods - Handle player input or AI logic internally
+
+// MakeHitStayDecision returns true for hit, false for stay
+// Handles both human input and AI decision making internally
+func (p *Player) MakeHitStayDecision(gameState *GameState, scanner *bufio.Scanner) (bool, error) {
+	p.ShowHand()
+
+	if p.IsComputer() {
+		// AI decision making
+		shouldHit := p.ShouldHit(gameState)
+
+		fmt.Printf("🤖 %s (%s AI) is thinking", p.Name, p.GetAIPersonalityName())
+
+		// Add some drama with thinking dots
+		for i := 0; i < 3; i++ {
+			fmt.Print(".")
+		}
+
+		if shouldHit {
+			fmt.Println(" decides to HIT!")
+			return true, nil
+		} else {
+			fmt.Println(" decides to STAY!")
+			return false, nil
+		}
+	}
+
+	// Human player input
+	fmt.Printf("🎯 %s, do you want to (H)it or (S)tay? ", p.Name)
+	for {
+		if !scanner.Scan() {
+			return false, fmt.Errorf("failed to read input")
+		}
+
+		choice := strings.ToLower(strings.TrimSpace(scanner.Text()))
+		if choice == "h" || choice == "hit" {
+			return true, nil
+		}
+		if choice == "s" || choice == "stay" {
+			return false, nil
+		}
+
+		fmt.Print("Please enter 'H' for Hit or 'S' for Stay: ")
+	}
+}
+
+// ChooseActionTargetInternal selects a target player for action cards
+// Handles both human input and AI decision making internally
+func (p *Player) ChooseActionTargetInternal(players []*Player, actionType ActionType, gameState *GameState, scanner *bufio.Scanner) (*Player, error) {
+	activePlayers := make([]*Player, 0)
+	for _, player := range players {
+		if player.IsActive() {
+			activePlayers = append(activePlayers, player)
+		}
+	}
+
+	if len(activePlayers) == 0 {
+		return nil, fmt.Errorf("no active players")
+	}
+
+	if len(activePlayers) == 1 {
+		target := activePlayers[0]
+		if p.IsComputer() {
+			fmt.Printf("   🤖 %s (%s AI) chooses %s\n", p.Name, p.GetAIPersonalityName(), target.Name)
+		}
+		return target, nil
+	}
+
+	if p.IsComputer() {
+		// AI target selection
+		target := p.ChooseActionTarget(players, actionType, gameState)
+
+		if target != nil {
+			fmt.Printf("   🤖 %s (%s AI) chooses %s\n", p.Name, p.GetAIPersonalityName(), target.Name)
+			return target, nil
+		}
+
+		// Fallback to first active player if AI returns nil
+		fmt.Printf("   🤖 %s (%s AI) chooses %s (default)\n", p.Name, p.GetAIPersonalityName(), activePlayers[0].Name)
+		return activePlayers[0], nil
+	}
+
+	// Human player input
+	actionName := map[ActionType]string{
+		Freeze:       "Who should be frozen?",
+		FlipThree:    "Who should flip three cards?",
+		SecondChance: "Who should get the Second Chance card?",
+	}
+
+	fmt.Printf("   %s\n", actionName[actionType])
+	for i, player := range activePlayers {
+		playerType := ""
+		if player.IsComputer() {
+			playerType = fmt.Sprintf(" (%s AI)", player.GetAIPersonalityName())
+		}
+		fmt.Printf("   %d) %s%s\n", i+1, player.Name, playerType)
+	}
+
+	for {
+		fmt.Printf("Enter choice (1-%d): ", len(activePlayers))
+		if !scanner.Scan() {
+			return nil, fmt.Errorf("failed to read input")
+		}
+
+		input := strings.TrimSpace(scanner.Text())
+		choice, err := strconv.Atoi(input)
+		if err != nil || choice < 1 || choice > len(activePlayers) {
+			fmt.Printf("Please enter a number between 1 and %d: ", len(activePlayers))
+			continue
+		}
+
+		return activePlayers[choice-1], nil
+	}
+}
+
+// DecideSecondChanceUsageInternal decides whether to use second chance
+// Handles both human input and AI decision making internally
+func (p *Player) DecideSecondChanceUsageInternal(duplicateValue int, scanner *bufio.Scanner) bool {
+	if p.IsComputer() {
+		// AI decision: generally should use Second Chance to avoid busting
+		fmt.Printf("   🤖 %s (%s AI) decides to use Second Chance!\n", p.Name, p.GetAIPersonalityName())
+		return true
+	}
+
+	// Human player input
+	fmt.Print("   Use Second Chance? (y/n): ")
+
+	for {
+		if !scanner.Scan() {
+			return false
+		}
+
+		choice := strings.ToLower(strings.TrimSpace(scanner.Text()))
+		if choice == "y" || choice == "yes" {
+			return true
+		}
+		if choice == "n" || choice == "no" {
+			return false
+		}
+
+		fmt.Print("Please enter 'y' for Yes or 'n' for No: ")
+	}
 }
 
 // AI Decision Methods - Implement these with your own strategies!
