@@ -11,12 +11,13 @@ import (
 
 // Game represents the main game state
 type Game struct {
-	players   []PlayerInterface
-	deck      *Deck
-	round     int
-	dealerIdx int
-	scanner   *bufio.Scanner
-	debugMode bool
+	players    []PlayerInterface
+	deck       *Deck
+	round      int
+	dealerIdx  int
+	scanner    *bufio.Scanner
+	debugMode  bool
+	silentMode bool
 }
 
 // NewGame creates a new Flip 7 game instance
@@ -36,6 +37,32 @@ func (g *Game) SetDebugMode(debug bool) {
 	g.deck.SetDebugMode(debug, g.scanner)
 }
 
+// SetSilentMode enables or disables silent mode (no output)
+func (g *Game) SetSilentMode(silent bool) {
+	g.silentMode = silent
+}
+
+// printf prints formatted output only when not in silent mode
+func (g *Game) printf(format string, args ...interface{}) {
+	if !g.silentMode {
+		fmt.Printf(format, args...)
+	}
+}
+
+// println prints output only when not in silent mode
+func (g *Game) println(args ...interface{}) {
+	if !g.silentMode {
+		fmt.Println(args...)
+	}
+}
+
+// print prints output only when not in silent mode
+func (g *Game) print(args ...interface{}) {
+	if !g.silentMode {
+		fmt.Print(args...)
+	}
+}
+
 // Run starts the main game loop
 func (g *Game) Run() error {
 	// Setup players
@@ -43,13 +70,13 @@ func (g *Game) Run() error {
 		return err
 	}
 
-	fmt.Println("\n🎮 Starting Flip 7! First to 200 points wins!")
+	g.println("\n🎮 Starting Flip 7! First to 200 points wins!")
 
 	// Main game loop
 	for !g.hasWinner() {
-		fmt.Printf("\n" + strings.Repeat("=", 50))
-		fmt.Printf("\n🎯 ROUND %d\n", g.round)
-		fmt.Printf(strings.Repeat("=", 50) + "\n")
+		g.printf("\n" + strings.Repeat("=", 50))
+		g.printf("\n🎯 ROUND %d\n", g.round)
+		g.printf(strings.Repeat("=", 50) + "\n")
 
 		if err := g.playRound(); err != nil {
 			return err
@@ -60,7 +87,7 @@ func (g *Game) Run() error {
 	}
 
 	winner := g.getWinner()
-	fmt.Printf("\n🎉 GAME OVER! %s wins with %d points! 🎉\n", winner.GetName(), winner.GetTotalScore())
+	g.printf("\n🎉 GAME OVER! %s wins with %d points! 🎉\n", winner.GetName(), winner.GetTotalScore())
 
 	return nil
 }
@@ -75,12 +102,12 @@ func (g *Game) getIntInput(min, max int) (int, error) {
 		input := strings.TrimSpace(g.scanner.Text())
 		num, err := strconv.Atoi(input)
 		if err != nil {
-			fmt.Printf("Please enter a valid number between %d and %d: ", min, max)
+			g.printf("Please enter a valid number between %d and %d: ", min, max)
 			continue
 		}
 
 		if num < min || num > max {
-			fmt.Printf("Please enter a number between %d and %d: ", min, max)
+			g.printf("Please enter a number between %d and %d: ", min, max)
 			continue
 		}
 
@@ -119,13 +146,13 @@ func (g *Game) getWinner() PlayerInterface {
 }
 
 func (g *Game) showScores() {
-	fmt.Println("\n📊 Current Scores:")
-	fmt.Println(strings.Repeat("-", 40))
+	g.println("\n📊 Current Scores:")
+	g.println(strings.Repeat("-", 40))
 	for _, player := range g.players {
 		icon := player.GetPlayerIcon()
-		fmt.Printf("%s %-20s: %3d points\n", icon, player.GetName(), player.GetTotalScore())
+		g.printf("%s %-20s: %3d points\n", icon, player.GetName(), player.GetTotalScore())
 	}
-	fmt.Println(strings.Repeat("-", 40))
+	g.println(strings.Repeat("-", 40))
 }
 
 func (g *Game) nextRound() {
@@ -158,13 +185,13 @@ func (g *Game) nextRound() {
 				totals[card.String()]++
 			}
 		}
-		fmt.Println(totals)
+		g.println(totals)
 		panic(fmt.Sprintf("Total cards is not the original total. Cards are disappearing! found: %d != excpected: %d", totalCards, g.deck.OriginalTotal))
 	}
 }
 
 func (g *Game) playRound() error {
-	fmt.Printf("Dealer: %s\n\n", g.players[g.dealerIdx].GetName())
+	g.printf("Dealer: %s\n\n", g.players[g.dealerIdx].GetName())
 
 	// Deal initial cards
 	if err := g.dealInitialCards(); err != nil {
@@ -183,7 +210,7 @@ func (g *Game) playRound() error {
 }
 
 func (g *Game) dealInitialCards() error {
-	fmt.Println("🃏 Dealing initial cards...")
+	g.println("🃏 Dealing initial cards...")
 
 	// Deal one card to each player
 	for i := 0; i < len(g.players); i++ {
@@ -200,7 +227,7 @@ func (g *Game) dealInitialCards() error {
 			return fmt.Errorf("deck is empty")
 		}
 
-		fmt.Printf("   %s draws %s\n", player.GetName(), card.String())
+		g.printf("   %s draws %s\n", player.GetName(), card.String())
 
 		// Handle action cards immediately
 		if card.IsActionCard() {
@@ -214,7 +241,7 @@ func (g *Game) dealInitialCards() error {
 		}
 	}
 
-	fmt.Println()
+	g.println()
 	g.showAllHands()
 	return nil
 }
@@ -231,7 +258,7 @@ func (g *Game) playTurns() error {
 
 			// Player must hit if they have no number cards
 			if !player.HasCards() {
-				fmt.Printf("🎯 %s has no number cards and must HIT\n", player.GetName())
+				g.printf("🎯 %s has no number cards and must HIT\n", player.GetName())
 				if err := g.playerHit(player); err != nil {
 					return err
 				}
@@ -262,17 +289,17 @@ func (g *Game) playTurns() error {
 }
 
 func (g *Game) calculateRoundScores() {
-	fmt.Println("📊 Calculating round scores...")
-	fmt.Println(strings.Repeat("-", 40))
+	g.println("📊 Calculating round scores...")
+	g.println(strings.Repeat("-", 40))
 
 	for _, player := range g.players {
 		roundScore := player.CalculateRoundScore()
 		player.AddToTotalScore()
 
-		fmt.Printf("%s: %d points this round (Total: %d)\n",
+		g.printf("%s: %d points this round (Total: %d)\n",
 			player.GetName(), roundScore, player.GetTotalScore())
 	}
-	fmt.Println(strings.Repeat("-", 40))
+	g.println(strings.Repeat("-", 40))
 }
 
 // Helper methods for gameplay
@@ -287,6 +314,10 @@ func (g *Game) hasActivePlayers() bool {
 }
 
 func (g *Game) showAllHands() {
+	if g.silentMode {
+		return
+	}
+
 	for _, player := range g.players {
 		player.ShowHand()
 	}
@@ -312,7 +343,7 @@ func (g *Game) playerHit(player PlayerInterface) error {
 		return fmt.Errorf("deck is empty")
 	}
 
-	fmt.Printf("   %s draws %s\n", player.GetName(), card.String())
+	g.printf("   %s draws %s\n", player.GetName(), card.String())
 
 	if card.IsActionCard() {
 		return g.handleActionCard(player, card)
@@ -328,11 +359,11 @@ func (g *Game) playerHit(player PlayerInterface) error {
 func (g *Game) playerStay(player PlayerInterface) {
 	player.Stay()
 	player.CalculateRoundScore()
-	fmt.Printf("   %s stays with %d points\n", player.GetName(), player.CalculateRoundScore())
+	g.printf("   %s stays with %d points\n", player.GetName(), player.CalculateRoundScore())
 }
 
 func (g *Game) handleActionCard(player PlayerInterface, card *Card) error {
-	fmt.Printf("   🎲 Action card! %s\n", card.String())
+	g.printf("   🎲 Action card! %s\n", card.String())
 
 	switch card.Action {
 	case Freeze:
@@ -355,7 +386,7 @@ func (g *Game) handleFreezeCard(player PlayerInterface, card *Card) error {
 
 	target.Stay()
 	target.CalculateRoundScore()
-	fmt.Printf("   ❄️ %s is frozen and stays with %d points!\n", target.GetName(), target.CalculateRoundScore())
+	g.printf("   ❄️ %s is frozen and stays with %d points!\n", target.GetName(), target.CalculateRoundScore())
 
 	g.deck.DiscardCard(card)
 	return nil
@@ -368,7 +399,7 @@ func (g *Game) handleFlipThreeCard(player PlayerInterface, card *Card) error {
 		return err
 	}
 
-	fmt.Printf("   🎲 %s must flip 3 cards!\n", target.GetName())
+	g.printf("   🎲 %s must flip 3 cards!\n", target.GetName())
 
 	for i := 0; i < 3; i++ {
 		if !target.IsActive() {
@@ -380,13 +411,13 @@ func (g *Game) handleFlipThreeCard(player PlayerInterface, card *Card) error {
 			break
 		}
 
-		fmt.Printf("      Card %d: %s\n", i+1, drawnCard.String())
+		g.printf("      Card %d: %s\n", i+1, drawnCard.String())
 
 		if drawnCard.IsActionCard() {
 			// Handle nested action cards after all 3 cards are drawn
 			if err := g.handleActionCard(target, drawnCard); err != nil {
 				if strings.Contains(err.Error(), "flip7") {
-					fmt.Printf("   🎉 %s achieved FLIP 7!\n", target.GetName())
+					g.printf("   🎉 %s achieved FLIP 7!\n", target.GetName())
 					g.endRoundForFlip7(target)
 					break // End the Flip Three loop
 				}
@@ -411,7 +442,7 @@ func (g *Game) handleFlipThreeCard(player PlayerInterface, card *Card) error {
 func (g *Game) handleSecondChanceCard(player PlayerInterface, card *Card) error {
 	// Try to give it to the player who drew it first
 	if !player.HasSecondChance() {
-		fmt.Printf("   🆘 %s receives a Second Chance card!\n", player.GetName())
+		g.printf("   🆘 %s receives a Second Chance card!\n", player.GetName())
 		if err := player.AddCard(card); err != nil {
 			g.deck.DiscardCard(card)
 			return err
@@ -420,22 +451,21 @@ func (g *Game) handleSecondChanceCard(player PlayerInterface, card *Card) error 
 	}
 
 	// Player already has second chance, need to give it to someone else
-	fmt.Printf("   🆘 %s already has Second Chance, must give to another player\n", player.GetName())
-
+	g.printf("   🆘 %s already has Second Chance, must give to another player\n", player.GetName())
 	target, err := player.ChoosePositiveActionTarget(g.buildGameState(), SecondChance)
 	if err != nil {
-		fmt.Printf("   🆘 No one can take the Second Chance card, discarding\n")
+		g.printf("   🆘 No one can take the Second Chance card, discarding\n")
 		g.deck.DiscardCard(card)
-		return err
+		return nil
 	}
 
 	if err := target.AddCard(card); err != nil {
 		g.deck.DiscardCard(card)
-		fmt.Printf("   🆘 %s cannot take the Second Chance card, discarding\n", player.GetName())
-		return err
+		g.printf("   🆘 %s cannot take the Second Chance card, discarding\n", player.GetName())
+		return nil
 	}
 
-	fmt.Printf("   🆘 %s receives a Second Chance card!\n", target.GetName())
+	g.printf("   🆘 %s receives a Second Chance card!\n", target.GetName())
 	return nil
 }
 
@@ -446,14 +476,14 @@ func (g *Game) chooseActionTarget(player PlayerInterface, prompt string, actionT
 
 func (g *Game) handleCardAddError(player PlayerInterface, card *Card, err error) error {
 	if strings.Contains(err.Error(), "flip7") {
-		fmt.Printf("   🎉 %s achieved FLIP 7 and wins the round!\n", player.GetName())
+		g.printf("   🎉 %s achieved FLIP 7 and wins the round!\n", player.GetName())
 		// Mark all other players as non-active to end the round
 		g.endRoundForFlip7(player)
 		return nil // Don't propagate the error, just end the round
 	}
 
 	if strings.Contains(err.Error(), "duplicate_with_second_chance") {
-		fmt.Printf("   💥 %s drew a duplicate %s but has Second Chance!\n", player.GetName(), card)
+		g.printf("   💥 %s drew a duplicate %s but has Second Chance!\n", player.GetName(), card)
 		secondChanceCard := player.UseSecondChance()
 		g.deck.DiscardCard(secondChanceCard) // Discard the second chance card
 		g.deck.DiscardCard(card)             // Discard the duplicate
@@ -462,7 +492,25 @@ func (g *Game) handleCardAddError(player PlayerInterface, card *Card, err error)
 
 	if strings.Contains(err.Error(), "bust") {
 		g.deck.DiscardCard(card) // Discard the duplicate
-		fmt.Printf("   💥 %s busts and is out of the round!\n", player.GetName())
+		g.printf("   💥 %s busts and is out of the round!\n", player.GetName())
+		return nil
+	}
+
+	if strings.Contains(err.Error(), "second_chance_duplicate") {
+		newTarget, err := player.ChoosePositiveActionTarget(g.buildGameState(), SecondChance)
+		if err != nil {
+			return err
+		}
+
+		if err := newTarget.AddCard(card); err != nil {
+			// Can't give second chance to anyone
+			g.printf("   🆘 %s cannot give the Second Chance card to anyone, discarding\n", player.GetName())
+			g.deck.DiscardCard(card)
+			return nil
+		} else {
+			g.printf("   🆘 %s gives the Second Chance card to %s\n", player.GetName(), newTarget.GetName())
+		}
+
 		return nil
 	}
 
@@ -471,13 +519,13 @@ func (g *Game) handleCardAddError(player PlayerInterface, card *Card, err error)
 
 // setupPlayers handles the initial player setup (human vs computer)
 func (g *Game) setupPlayers() error {
-	fmt.Println("How many players total? (2-8): ")
+	g.println("How many players total? (2-8): ")
 	numPlayers, err := g.getIntInput(2, 8)
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("How many human players? (0-%d): ", numPlayers)
+	g.printf("How many human players? (0-%d): ", numPlayers)
 	numHumans, err := g.getIntInput(0, numPlayers)
 	if err != nil {
 		return err
@@ -487,7 +535,7 @@ func (g *Game) setupPlayers() error {
 
 	// Setup human players
 	for i := 0; i < numHumans; i++ {
-		fmt.Printf("Enter name for Human Player %d: ", i+1)
+		g.printf("Enter name for Human Player %d: ", i+1)
 		name, err := g.getStringInput()
 		if err != nil {
 			return err
@@ -502,52 +550,53 @@ func (g *Game) setupPlayers() error {
 			return err
 		}
 		g.players = append(g.players, NewComputerPlayer(name, strategy, actionTargetStrategy, positiveActionTargetStrategy))
-		fmt.Printf("  → Added: %s (%s AI)\n", name, g.players[len(g.players)-1].GetName())
+		g.printf("  → Added: %s (%s AI)\n", name, g.players[len(g.players)-1].GetName())
 	}
 
 	if numHumans == 0 {
-		fmt.Printf("\n🎮 Starting AI-only Flip 7 with %d computer players!\n", numComputers)
-		fmt.Println("🍿 Sit back and watch the AIs battle it out!")
+		g.printf("\n🎮 Starting AI-only Flip 7 with %d computer players!\n", numComputers)
+		g.println("🍿 Sit back and watch the AIs battle it out!")
 
 		// Ask for number of games to simulate
-		fmt.Printf("\nHow many games would you like to simulate? ")
+		g.printf("\nHow many games would you like to simulate? ")
 		numGames, err := g.getIntInput(1, math.MaxInt)
 		if err != nil {
 			return err
 		}
 
 		if numGames > 1 {
+			g.SetSilentMode(true)
 			return g.runMultipleGames(numGames)
 		}
 	} else {
-		fmt.Printf("\n🎮 Starting Flip 7 with %d humans and %d computers!\n", numHumans, numComputers)
+		g.printf("\n🎮 Starting Flip 7 with %d humans and %d computers!\n", numHumans, numComputers)
 	}
 	return nil
 }
 
 // getComputerPlayerSetup handles setup for a single computer player
 func (g *Game) getComputerPlayerSetup(computerNum int) (string, HitOrStayStrategy, ActionTargetStrategy, ActionTargetStrategy, error) {
-	fmt.Printf("\nComputer Player %d:\n", computerNum)
-	fmt.Println("Choose AI strategy:")
-	fmt.Println("  1) Plays to 20")
-	fmt.Println("  2) Plays to 25")
-	fmt.Println("  3) Plays to 30")
-	fmt.Println("  4) Plays to 35")
-	fmt.Println("  5) Hit until ahead by 1")
-	fmt.Println("  6) Hit until ahead by 10")
-	fmt.Println("  7) Hit p(BUST) < 0.2")
-	fmt.Println("  8) Hit p(BUST) < 0.25")
-	fmt.Println("  9) Hit p(BUST) < 0.3")
-	fmt.Println("  10) Hit p(BUST) < 0.35")
-	fmt.Println("  11) Hit p(BUST) < 0.4")
-	fmt.Println("  12) FLIP 7")
-	fmt.Println("  13) Random")
-	fmt.Println("  14) Adaptive Bust Prob (0.3)")
-	fmt.Println("  15) Expected Value")
-	fmt.Println("  16) Hybrid Strategy")
-	fmt.Println("  17) Gap-Based Strategy")
-	fmt.Println("  18) Optimal Strategy")
-	fmt.Print("Enter choice (1-18): ")
+	g.printf("\nComputer Player %d:\n", computerNum)
+	g.println("Choose AI strategy:")
+	g.println("  1) Plays to 20")
+	g.println("  2) Plays to 25")
+	g.println("  3) Plays to 30")
+	g.println("  4) Plays to 35")
+	g.println("  5) Hit until ahead by 1")
+	g.println("  6) Hit until ahead by 10")
+	g.println("  7) Hit p(BUST) < 0.2")
+	g.println("  8) Hit p(BUST) < 0.25")
+	g.println("  9) Hit p(BUST) < 0.3")
+	g.println("  10) Hit p(BUST) < 0.35")
+	g.println("  11) Hit p(BUST) < 0.4")
+	g.println("  12) FLIP 7")
+	g.println("  13) Random")
+	g.println("  14) Adaptive Bust Prob (0.3)")
+	g.println("  15) Expected Value")
+	g.println("  16) Hybrid Strategy")
+	g.println("  17) Gap-Based Strategy")
+	g.println("  18) Optimal Strategy")
+	g.print("Enter choice (1-18): ")
 
 	choice, err := g.getIntInput(1, 18)
 	if err != nil {
@@ -635,7 +684,7 @@ func (g *Game) endRoundForFlip7(flip7Player PlayerInterface) {
 
 // runMultipleGames runs multiple AI-only games and tracks statistics
 func (g *Game) runMultipleGames(numGames int) error {
-	fmt.Printf("\n🎲 Running %d games for statistical analysis...\n", numGames)
+	g.printf("\n🎲 Running %d games for statistical analysis...\n", numGames)
 
 	// Track wins for each player
 	playerWins := make(map[string]int)
@@ -650,13 +699,16 @@ func (g *Game) runMultipleGames(numGames int) error {
 	// Run the games
 	for gameNum := 1; gameNum <= numGames; gameNum++ {
 		if gameNum%10 == 0 || gameNum == 1 {
-			fmt.Printf("⚡ Game %d/%d...\n", gameNum, numGames)
+			g.printf("⚡ Game %d/%d...\n", gameNum, numGames)
 		}
 
 		// Reset the game state
 		g.resetGameState()
 
-		// Run a single game
+		// Enable silent mode for simulation
+		g.SetSilentMode(true)
+
+		// Run a single game using regular methods (now silent)
 		err := g.runSingleGame()
 		if err != nil {
 			return fmt.Errorf("error in game %d: %v", gameNum, err)
@@ -665,6 +717,9 @@ func (g *Game) runMultipleGames(numGames int) error {
 		// Track the winner
 		winner := g.getWinner()
 		playerWins[winner.GetName()]++
+
+		// Disable silent mode to show progress
+		g.SetSilentMode(false)
 	}
 
 	// Display statistics
@@ -693,294 +748,23 @@ func (g *Game) resetGameState() {
 	g.deck = NewDeck()
 }
 
-// runSingleGame runs a single game without output (for simulation)
+// runSingleGame runs a single game (output controlled by silentMode)
 func (g *Game) runSingleGame() error {
-	// Main game loop (silent version)
+	// Main game loop
 	for !g.hasWinner() {
-		if err := g.playRoundSilent(); err != nil {
+		if err := g.playRound(); err != nil {
 			return err
 		}
-		g.nextRoundSilent()
+		g.nextRound()
 	}
 	return nil
-}
-
-// playRoundSilent plays a round without console output
-func (g *Game) playRoundSilent() error {
-	// Deal initial cards silently
-	if err := g.dealInitialCardsSilent(); err != nil {
-		return err
-	}
-
-	// Play turns silently
-	if err := g.playTurnsSilent(); err != nil {
-		return err
-	}
-
-	// Calculate scores silently
-	g.calculateRoundScoresSilent()
-	return nil
-}
-
-// dealInitialCardsSilent deals cards without output
-func (g *Game) dealInitialCardsSilent() error {
-	for i := 0; i < len(g.players); i++ {
-		playerIdx := (g.dealerIdx + 1 + i) % len(g.players)
-		player := g.players[playerIdx]
-
-		// Could have busted because of an action card
-		if !player.IsActive() {
-			continue
-		}
-
-		card := g.deck.DrawCard()
-		if card == nil {
-			return fmt.Errorf("deck is empty")
-		}
-
-		if card.IsActionCard() {
-			if err := g.handleActionCardSilent(player, card); err != nil {
-				return err
-			}
-		} else {
-			if err := player.AddCard(card); err != nil {
-				return g.handleCardAddErrorSilent(player, card, err)
-			}
-		}
-	}
-	return nil
-}
-
-// playTurnsSilent plays turns without output
-func (g *Game) playTurnsSilent() error {
-	for g.hasActivePlayers() {
-		for i := 0; i < len(g.players); i++ {
-			playerIdx := (g.dealerIdx + 1 + i) % len(g.players)
-			player := g.players[playerIdx]
-
-			if !player.IsActive() {
-				continue
-			}
-
-			if !player.HasCards() {
-				if err := g.playerHitSilent(player); err != nil {
-					return err
-				}
-				continue
-			}
-
-			gameState := g.buildGameState()
-			shouldHit, err := player.MakeHitStayDecision(gameState)
-			if err != nil {
-				return err
-			}
-
-			if shouldHit {
-				if err := g.playerHitSilent(player); err != nil {
-					return err
-				}
-			} else {
-				g.playerStaySilent(player)
-			}
-
-			if !g.hasActivePlayers() {
-				break
-			}
-		}
-	}
-	return nil
-}
-
-// playerHitSilent handles a player hit without output
-func (g *Game) playerHitSilent(player PlayerInterface) error {
-	card := g.deck.DrawCard()
-	if card == nil {
-		return fmt.Errorf("deck is empty")
-	}
-
-	if card.IsActionCard() {
-		return g.handleActionCardSilent(player, card)
-	}
-
-	if err := player.AddCard(card); err != nil {
-		return g.handleCardAddErrorSilent(player, card, err)
-	}
-	return nil
-}
-
-// playerStaySilent handles a player stay without output
-func (g *Game) playerStaySilent(player PlayerInterface) {
-	player.Stay()
-	player.CalculateRoundScore()
-}
-
-// handleActionCardSilent handles action cards without output
-func (g *Game) handleActionCardSilent(player PlayerInterface, card *Card) error {
-	switch card.Action {
-	case Freeze:
-		return g.handleFreezeCardSilent(player, card)
-	case FlipThree:
-		return g.handleFlipThreeCardSilent(player, card)
-	case SecondChance:
-		return g.handleSecondChanceCardSilent(player, card)
-	}
-	return nil
-}
-
-// handleFreezeCardSilent handles freeze cards without output
-func (g *Game) handleFreezeCardSilent(player PlayerInterface, card *Card) error {
-	gameState := g.buildGameState()
-	target, err := player.ChooseActionTarget(gameState, Freeze)
-	if err != nil {
-		g.deck.DiscardCard(card)
-		return err
-	}
-
-	if !target.IsActive() {
-		for _, p := range gameState.Players {
-			fmt.Printf("%+v\n", p)
-		}
-		panic(fmt.Sprintf("%s Chose inactive player %s, gameState: %+v", player.GetName(), target.GetName(), gameState))
-	}
-	target.Stay()
-	g.deck.DiscardCard(card)
-	return nil
-}
-
-// handleFlipThreeCardSilent handles flip three cards without output
-func (g *Game) handleFlipThreeCardSilent(player PlayerInterface, card *Card) error {
-	gameState := g.buildGameState()
-	target, err := player.ChooseActionTarget(gameState, FlipThree)
-	if err != nil {
-		g.deck.DiscardCard(card)
-		return err
-	}
-
-	for i := 0; i < 3; i++ {
-		if !target.IsActive() {
-			break
-		}
-
-		drawnCard := g.deck.DrawCard()
-		if drawnCard == nil {
-			break
-		}
-
-		if drawnCard.IsActionCard() {
-			if err := g.handleActionCardSilent(target, drawnCard); err != nil {
-				if strings.Contains(err.Error(), "flip7") {
-					g.endRoundForFlip7Silent(target)
-					break
-				}
-				g.deck.DiscardCard(drawnCard)
-				return err
-			}
-		} else {
-			if err := target.AddCard(drawnCard); err != nil {
-				if err := g.handleCardAddErrorSilent(target, drawnCard, err); err != nil {
-					return err
-				}
-				break
-			}
-		}
-	}
-
-	g.deck.DiscardCard(card)
-	return nil
-}
-
-// handleSecondChanceCardSilent handles second chance cards without output
-func (g *Game) handleSecondChanceCardSilent(player PlayerInterface, card *Card) error {
-	if !player.HasSecondChance() {
-		if err := player.AddCard(card); err != nil {
-			// Handle second_chance_duplicate error case
-			if strings.Contains(err.Error(), "second_chance_duplicate") {
-				g.deck.DiscardCard(card)
-				return nil // Just discard and continue
-			}
-			g.deck.DiscardCard(card)
-			return err
-		}
-		return nil
-	}
-
-	gameState := g.buildGameState()
-	target, err := player.ChoosePositiveActionTarget(gameState, SecondChance)
-	if err != nil {
-		g.deck.DiscardCard(card)
-		return nil // Don't propagate error, just discard card
-	}
-
-	if err := target.AddCard(card); err != nil {
-		// Handle second_chance_duplicate error case
-		if strings.Contains(err.Error(), "second_chance_duplicate") {
-			g.deck.DiscardCard(card)
-			return nil // Just discard and continue
-		}
-		g.deck.DiscardCard(card)
-		return err
-	}
-	return nil
-}
-
-// handleCardAddErrorSilent handles card add errors without output
-func (g *Game) handleCardAddErrorSilent(player PlayerInterface, card *Card, err error) error {
-	if strings.Contains(err.Error(), "flip7") {
-		g.endRoundForFlip7Silent(player)
-		return nil
-	}
-
-	if strings.Contains(err.Error(), "duplicate_with_second_chance") {
-		secondChanceCard := player.UseSecondChance()
-		g.deck.DiscardCard(secondChanceCard)
-		g.deck.DiscardCard(card)
-		return nil
-	}
-
-	if strings.Contains(err.Error(), "bust") {
-		g.deck.DiscardCard(card)
-		return nil
-	}
-
-	return err
-}
-
-// endRoundForFlip7Silent handles flip 7 without output
-func (g *Game) endRoundForFlip7Silent(flip7Player PlayerInterface) {
-	for _, player := range g.players {
-		if player != flip7Player && player.IsActive() {
-			player.Stay()
-			player.CalculateRoundScore()
-		}
-	}
-}
-
-// calculateRoundScoresSilent calculates scores without output
-func (g *Game) calculateRoundScoresSilent() {
-	for _, player := range g.players {
-		player.CalculateRoundScore()
-		player.AddToTotalScore()
-	}
-}
-
-// nextRoundSilent advances to next round without output
-func (g *Game) nextRoundSilent() {
-	g.round++
-	g.dealerIdx = (g.dealerIdx + 1) % len(g.players)
-
-	for _, player := range g.players {
-		discardedCards := player.ResetForNewRound()
-		for _, card := range discardedCards {
-			g.deck.DiscardCard(card)
-		}
-	}
 }
 
 // displayGameStatistics shows the final win-rate statistics
 func (g *Game) displayGameStatistics(numGames int, playerWins map[string]int, playerNames []string) {
-	fmt.Printf("\n" + strings.Repeat("=", 60) + "\n")
-	fmt.Printf("🏆 SIMULATION RESULTS - %d GAMES COMPLETED\n", numGames)
-	fmt.Printf(strings.Repeat("=", 60) + "\n")
+	g.printf("\n" + strings.Repeat("=", 60) + "\n")
+	g.printf("🏆 SIMULATION RESULTS - %d GAMES COMPLETED\n", numGames)
+	g.printf(strings.Repeat("=", 60) + "\n")
 
 	// Sort players by win count (descending)
 	type playerStat struct {
@@ -1006,8 +790,8 @@ func (g *Game) displayGameStatistics(numGames int, playerWins map[string]int, pl
 	}
 
 	// Display results
-	fmt.Printf("%-20s %8s %10s %12s\n", "PLAYER", "WINS", "WIN RATE", "PERFORMANCE")
-	fmt.Printf(strings.Repeat("-", 60) + "\n")
+	g.printf("%-20s %8s %10s %12s\n", "PLAYER", "WINS", "WIN RATE", "PERFORMANCE")
+	g.printf(strings.Repeat("-", 60) + "\n")
 
 	for i, stat := range stats {
 		var medal string
@@ -1033,21 +817,21 @@ func (g *Game) displayGameStatistics(numGames int, playerWins map[string]int, pl
 			performance = "😔 WEAK"
 		}
 
-		fmt.Printf("%-20s %8d %9.1f%% %12s %s\n",
+		g.printf("%-20s %8d %9.1f%% %12s %s\n",
 			stat.name, stat.wins, stat.rate, performance, medal)
 	}
 
-	fmt.Printf(strings.Repeat("-", 60) + "\n")
-	fmt.Printf("Total Games: %d\n", numGames)
+	g.printf(strings.Repeat("-", 60) + "\n")
+	g.printf("Total Games: %d\n", numGames)
 
 	// Additional statistics
 	winner := stats[0]
 	if len(stats) > 1 {
 		runnerUp := stats[1]
 		margin := winner.rate - runnerUp.rate
-		fmt.Printf("Victory Margin: %.1f%% (%s vs %s)\n",
+		g.printf("Victory Margin: %.1f%% (%s vs %s)\n",
 			margin, winner.name, runnerUp.name)
 	}
 
-	fmt.Printf(strings.Repeat("=", 60) + "\n")
+	g.printf(strings.Repeat("=", 60) + "\n")
 }

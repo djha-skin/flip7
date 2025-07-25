@@ -28,6 +28,7 @@ func (p *HumanPlayer) GetPlayerIcon() string {
 }
 
 func (p *HumanPlayer) MakeHitStayDecision(gameState *GameState) (bool, error) {
+	fmt.Printf("%s's hand, %v\n", p.Name, p.GetHand())
 	fmt.Printf("🎯 %s, do you want to (H)it or (S)tay? ", p.Name)
 	for {
 		if !p.scanner.Scan() {

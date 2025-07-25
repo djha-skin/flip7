@@ -74,19 +74,19 @@ func (d *Deck) Shuffle() {
 // DrawCard draws the top card from the deck
 func (d *Deck) DrawCard() *Card {
 	if len(d.cards) == 0 {
-		d.Reshuffle()
-		if len(d.cards) == 0 {
-			panic("All cards disappeared!	")
-		}
-
+		panic("All cards disappeared!	")
 	}
-
 	if d.debugMode {
 		return d.drawCardDebug()
 	}
 
 	card := d.cards[len(d.cards)-1]
 	d.cards = d.cards[:len(d.cards)-1]
+
+	if len(d.cards) == 0 {
+		d.Reshuffle()
+	}
+
 	return card
 }
 

@@ -3,7 +3,6 @@ package main
 import (
 	"math"
 	"math/rand"
-	"slices"
 )
 
 // GameState provides context for AI decision making
@@ -67,25 +66,33 @@ func PlayRoundTo(n int) HitOrStayStrategy {
 
 func PlayToBustProbability(p float64) HitOrStayStrategy {
 	return func(self PlayerInterface, gameState *GameState) bool {
-		nBust := 0
-		nTotal := len(gameState.CardsInDeck)
-		numberCards := make([]int, 0)
-		for _, card := range self.GetHand() {
-			if card.Type == NumberCard {
-				numberCards = append(numberCards, card.Value)
-			}
-		}
-
-		for _, possibleCard := range gameState.CardsInDeck {
-			if possibleCard.Type == NumberCard {
-				if slices.Contains(numberCards, possibleCard.Value) {
-					nBust++
-				}
-			}
-		}
-
-		return float64(nBust)/float64(nTotal) < p
+		return CalculateBustProbability(self, gameState) < p
 	}
+}
+
+// Helper functions for advanced strategies
+func CalculateBustProbability(player PlayerInterface, gameState *GameState) float64 {
+	numberCards := make(map[int]bool)
+	for _, card := range player.GetHand() {
+		if card.Type == NumberCard {
+			numberCards[card.Value] = true
+		}
+	}
+
+	// Count available cards that would cause a bust
+	bustCards := 0
+	for _, card := range gameState.CardsInDeck {
+		if card.Type == NumberCard && numberCards[card.Value] {
+			bustCards += 1
+		}
+	}
+
+	totalCards := len(gameState.CardsInDeck)
+	if totalCards == 0 {
+		panic("no cards left in deck can't calculate bust probability")
+	}
+
+	return float64(bustCards) / float64(totalCards)
 }
 
 func HitUntilAheadBy(n int) HitOrStayStrategy {
@@ -301,36 +308,6 @@ func OptimalStrategy(self PlayerInterface, gameState *GameState) bool {
 	return bustProb < baseThreshold
 }
 
-// Helper functions for advanced strategies
-
-func CalculateBustProbability(player PlayerInterface, gameState *GameState) float64 {
-	numberCards := make(map[int]bool)
-	for _, card := range player.GetHand() {
-		if card.Type == NumberCard {
-			numberCards[card.Value] = true
-		}
-	}
-
-	// Count available cards that would cause a bust
-	bustCards := 0
-	totalCards := 0
-
-	for _, card := range gameState.CardsInDeck {
-		if card.Type == NumberCard {
-			totalCards++
-			if numberCards[card.Value] {
-				bustCards++
-			}
-		}
-	}
-
-	if totalCards == 0 {
-		return 1.0 // No cards left, would bust
-	}
-
-	return float64(bustCards) / float64(totalCards)
-}
-
 func CalculateExpectedPointsFromHit(player PlayerInterface, gameState *GameState) float64 {
 	numberCards := make(map[int]bool)
 	for _, card := range player.GetHand() {
@@ -377,6 +354,10 @@ func TargetLeaderStrategy(self PlayerInterface, gameState *GameState, actionType
 	var leader PlayerInterface
 	leaderScore := 0
 	for _, player := range gameState.ActivePlayers {
+		if actionType == SecondChance && player.HasSecondChance() {
+			continue
+		}
+
 		if player != self {
 			playerScore := player.GetTotalScore() + player.CalculateRoundScore()
 			if playerScore > leaderScore {
@@ -398,6 +379,10 @@ func TargetLastPlaceStrategy(self PlayerInterface, gameState *GameState, actionT
 	var last PlayerInterface
 	lastScore := math.MaxInt
 	for _, player := range gameState.ActivePlayers {
+		if actionType == SecondChance && player.HasSecondChance() {
+			continue
+		}
+
 		if player != self {
 			playerScore := player.GetTotalScore() + player.CalculateRoundScore()
 			if playerScore < lastScore {
@@ -418,6 +403,10 @@ func TargetLastPlaceStrategy(self PlayerInterface, gameState *GameState, actionT
 func TargetRandomStrategy(self PlayerInterface, gameState *GameState, actionType ActionType) PlayerInterface {
 	activePlayers := make([]PlayerInterface, 0)
 	for _, player := range gameState.Players {
+		if actionType == SecondChance && player.HasSecondChance() {
+			continue
+		}
+
 		if player.IsActive() && player != self {
 			activePlayers = append(activePlayers, player)
 		}
