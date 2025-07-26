@@ -4,9 +4,12 @@ import (
 	"bufio"
 	"fmt"
 	"math"
+	"math/rand"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Game represents the main game state
@@ -519,8 +522,8 @@ func (g *Game) handleCardAddError(player PlayerInterface, card *Card, err error)
 
 // setupPlayers handles the initial player setup (human vs computer)
 func (g *Game) setupPlayers() error {
-	g.println("How many players total? (2-8): ")
-	numPlayers, err := g.getIntInput(2, 8)
+	g.println("How many players total? (2-18): ")
+	numPlayers, err := g.getIntInput(2, 18)
 	if err != nil {
 		return err
 	}
@@ -575,27 +578,47 @@ func (g *Game) setupPlayers() error {
 }
 
 // getComputerPlayerSetup handles setup for a single computer player
+var computerNames = []string{
+	"HAL",
+	"Data",
+	"GLaDOS",
+	"WALL-E",
+	"EVE",
+	"R2D2",
+	"C3PO",
+	"T-800",
+	"Skynet",
+	"Optimus",
+	"Megatron",
+	"Bender",
+	"WOPR",
+	"Cortana",
+	"Marvin",
+}
+
 func (g *Game) getComputerPlayerSetup(computerNum int) (string, HitOrStayStrategy, ActionTargetStrategy, ActionTargetStrategy, error) {
+	nameIndex := rand.Intn(len(computerNames))
+	name := computerNames[nameIndex]
+	computerNames = slices.Delete(computerNames, nameIndex, nameIndex+1)
+
 	g.printf("\nComputer Player %d:\n", computerNum)
 	g.println("Choose AI strategy:")
 	g.println("  1) Plays to 20")
 	g.println("  2) Plays to 25")
 	g.println("  3) Plays to 30")
 	g.println("  4) Plays to 35")
-	g.println("  5) Hit until ahead by 1")
-	g.println("  6) Hit until ahead by 10")
-	g.println("  7) Hit p(BUST) < 0.2")
-	g.println("  8) Hit p(BUST) < 0.25")
-	g.println("  9) Hit p(BUST) < 0.3")
-	g.println("  10) Hit p(BUST) < 0.35")
-	g.println("  11) Hit p(BUST) < 0.4")
-	g.println("  12) FLIP 7")
-	g.println("  13) Random")
-	g.println("  14) Adaptive Bust Prob (0.3)")
-	g.println("  15) Expected Value")
-	g.println("  16) Hybrid Strategy")
-	g.println("  17) Gap-Based Strategy")
-	g.println("  18) Optimal Strategy")
+	g.println("  5) Hit p(BUST) < 0.2")
+	g.println("  6) Hit p(BUST) < 0.25")
+	g.println("  7) Hit p(BUST) < 0.3")
+	g.println("  8) Hit p(BUST) < 0.35")
+	g.println("  9) Hit p(BUST) < 0.4")
+	g.println("  10) FLIP 7")
+	g.println("  11) Random")
+	g.println("  12) Adaptive Bust Prob (0.3)")
+	g.println("  13) Expected Value")
+	g.println("  14) Hybrid Strategy")
+	g.println("  15) Gap-Based Strategy")
+	g.println("  16) Optimal Strategy")
 	g.print("Enter choice (1-18): ")
 
 	choice, err := g.getIntInput(1, 18)
@@ -603,46 +626,96 @@ func (g *Game) getComputerPlayerSetup(computerNum int) (string, HitOrStayStrateg
 		choice = 13
 	}
 
+	var strategy HitOrStayStrategy
+	var actionTargetStrategy ActionTargetStrategy
+	var positiveActionTargetStrategy ActionTargetStrategy
+
 	switch choice {
 	case 1:
-		return "Plays to 20", PlayRoundTo(20), TargetLeaderStrategy, TargetLastPlaceStrategy, nil
+		name += " (20)"
+		strategy = PlayRoundTo(20)
+		actionTargetStrategy = TargetLeaderStrategy
+		positiveActionTargetStrategy = TargetLastPlaceStrategy
 	case 2:
-		return "Plays to 25", PlayRoundTo(25), TargetLeaderStrategy, TargetLastPlaceStrategy, nil
+		name += " (25)"
+		strategy = PlayRoundTo(25)
+		actionTargetStrategy = TargetLeaderStrategy
+		positiveActionTargetStrategy = TargetLastPlaceStrategy
 	case 3:
-		return "Plays to 30", PlayRoundTo(30), TargetLeaderStrategy, TargetLastPlaceStrategy, nil
+		name += " (30)"
+		strategy = PlayRoundTo(30)
+		actionTargetStrategy = TargetLeaderStrategy
+		positiveActionTargetStrategy = TargetLastPlaceStrategy
 	case 4:
-		return "Plays to 35", PlayRoundTo(35), TargetLeaderStrategy, TargetLastPlaceStrategy, nil
+		name += " (35)"
+		strategy = PlayRoundTo(35)
+		actionTargetStrategy = TargetLeaderStrategy
+		positiveActionTargetStrategy = TargetLastPlaceStrategy
 	case 5:
-		return "Until ahead by 1", HitUntilAheadBy(1), TargetLeaderStrategy, TargetLastPlaceStrategy, nil
+		name += " (p0.2)"
+		strategy = PlayToBustProbability(0.2)
+		actionTargetStrategy = TargetLeaderStrategy
+		positiveActionTargetStrategy = TargetLastPlaceStrategy
 	case 6:
-		return "Until ahead by 10", HitUntilAheadBy(10), TargetLeaderStrategy, TargetLastPlaceStrategy, nil
+		name += " (p0.25)"
+		strategy = PlayToBustProbability(0.25)
+		actionTargetStrategy = TargetLeaderStrategy
+		positiveActionTargetStrategy = TargetLastPlaceStrategy
 	case 7:
-		return "p(BUST) < 0.2", PlayToBustProbability(0.2), TargetLeaderStrategy, TargetLastPlaceStrategy, nil
+		name += " (p0.3)"
+		strategy = PlayToBustProbability(0.3)
+		actionTargetStrategy = TargetLeaderStrategy
+		positiveActionTargetStrategy = TargetLastPlaceStrategy
 	case 8:
-		return "p(BUST) < 0.25", PlayToBustProbability(0.25), TargetLeaderStrategy, TargetLastPlaceStrategy, nil
+		name += " (p0.35)"
+		strategy = PlayToBustProbability(0.35)
+		actionTargetStrategy = TargetLeaderStrategy
+		positiveActionTargetStrategy = TargetLastPlaceStrategy
 	case 9:
-		return "p(BUST) < 0.3", PlayToBustProbability(0.3), TargetLeaderStrategy, TargetLastPlaceStrategy, nil
+		name += " (p0.4)"
+		strategy = PlayToBustProbability(0.4)
+		actionTargetStrategy = TargetLeaderStrategy
+		positiveActionTargetStrategy = TargetLastPlaceStrategy
 	case 10:
-		return "p(BUST) < 0.35", PlayToBustProbability(0.35), TargetLeaderStrategy, TargetLastPlaceStrategy, nil
+		name += " (hit)"
+		strategy = AlwaysHitStrategy
+		actionTargetStrategy = TargetLeaderStrategy
+		positiveActionTargetStrategy = TargetLastPlaceStrategy
 	case 11:
-		return "p(BUST) < 0.4", PlayToBustProbability(0.4), TargetLeaderStrategy, TargetLastPlaceStrategy, nil
+		name += " (rand)"
+		strategy = RandomHitOrStayStrategy
+		actionTargetStrategy = TargetRandomStrategy
+		positiveActionTargetStrategy = TargetRandomStrategy
 	case 12:
-		return "FLIP 7", AlwaysHitStrategy, TargetLeaderStrategy, TargetLastPlaceStrategy, nil
+		name += " (adapt0.3)"
+		strategy = AdaptiveBustProbabilityStrategy(0.3)
+		actionTargetStrategy = TargetLeaderStrategy
+		positiveActionTargetStrategy = TargetLastPlaceStrategy
 	case 13:
-		return "Random", RandomHitOrStayStrategy, TargetRandomStrategy, TargetRandomStrategy, nil
+		name += " (exp)"
+		strategy = ExpectedValueStrategy
+		actionTargetStrategy = TargetLeaderStrategy
+		positiveActionTargetStrategy = TargetLastPlaceStrategy
 	case 14:
-		return "Adaptive Bust 0.3", AdaptiveBustProbabilityStrategy(0.3), TargetLeaderStrategy, TargetLastPlaceStrategy, nil
+		name += " (hybrid)"
+		strategy = HybridStrategy
+		actionTargetStrategy = TargetLeaderStrategy
+		positiveActionTargetStrategy = TargetLastPlaceStrategy
 	case 15:
-		return "Expected Value", ExpectedValueStrategy, TargetLeaderStrategy, TargetLastPlaceStrategy, nil
+		name += " (gap)"
+		strategy = GapBasedStrategy
+		actionTargetStrategy = TargetLeaderStrategy
+		positiveActionTargetStrategy = TargetLastPlaceStrategy
 	case 16:
-		return "Hybrid Strategy", HybridStrategy, TargetLeaderStrategy, TargetLastPlaceStrategy, nil
-	case 17:
-		return "Gap-Based", GapBasedStrategy, TargetLeaderStrategy, TargetLastPlaceStrategy, nil
-	case 18:
-		return "Optimal", OptimalStrategy, TargetLeaderStrategy, TargetLastPlaceStrategy, nil
+		name += " (opt)"
+		strategy = OptimalStrategy
+		actionTargetStrategy = TargetLeaderStrategy
+		positiveActionTargetStrategy = TargetLastPlaceStrategy
 	default:
-		return "Random", RandomHitOrStayStrategy, TargetRandomStrategy, TargetRandomStrategy, nil
+		panic("invalid choice")
 	}
+
+	return name, strategy, actionTargetStrategy, positiveActionTargetStrategy, nil
 }
 
 // buildGameState creates a GameState for AI decision making
@@ -696,10 +769,18 @@ func (g *Game) runMultipleGames(numGames int) error {
 		playerWins[player.GetName()] = 0
 	}
 
+	// Track time for progress reporting
+	startTime := time.Now()
+	lastProgressTime := startTime
+
 	// Run the games
 	for gameNum := 1; gameNum <= numGames; gameNum++ {
-		if gameNum%10 == 0 || gameNum == 1 {
-			g.printf("⚡ Game %d/%d...\n", gameNum, numGames)
+		// Show progress every 5 seconds or for first game
+		now := time.Now()
+		if gameNum == 1 || now.Sub(lastProgressTime) >= 5*time.Second {
+			elapsed := now.Sub(startTime)
+			g.printf("⚡ Game %d/%d... (%.1fs elapsed)\n", gameNum, numGames, elapsed.Seconds())
+			lastProgressTime = now
 		}
 
 		// Reset the game state
