@@ -594,6 +594,9 @@ var computerNames = []string{
 	"WOPR",
 	"Cortana",
 	"Marvin",
+	"Siri",
+	"Alexa",
+	"Jeeves",
 }
 
 func (g *Game) getComputerPlayerSetup(computerNum int) (string, HitOrStayStrategy, ActionTargetStrategy, ActionTargetStrategy, error) {
