@@ -616,10 +616,11 @@ func (g *Game) getComputerPlayerSetup(computerNum int) (string, HitOrStayStrateg
 	g.println("  8) Gap-Based Strategy")
 	g.println("  9) Optimal Strategy")
 	g.println("  10) Bayesian Gain Strategy")
+	g.println("  11) Gap Aware Stragegy")
 
-	g.print("Enter choice (1-10): ")
+	g.print("Enter choice (1-11): ")
 
-	choice, err := g.getIntInput(1, 10)
+	choice, err := g.getIntInput(1, 11)
 	if err != nil {
 		choice = 6
 	}
@@ -629,6 +630,8 @@ func (g *Game) getComputerPlayerSetup(computerNum int) (string, HitOrStayStrateg
 	var positiveActionTargetStrategy ActionTargetStrategy
 	var targetScore int
 	var bustProbabilityThreshold float64
+	var gapTolerance int
+	var slackFactor int
 
 	if choice == 1 {
 		g.print("Enter Target Score: ")
@@ -651,6 +654,28 @@ func (g *Game) getComputerPlayerSetup(computerNum int) (string, HitOrStayStrateg
 			prob = 0.33
 		}
 		bustProbabilityThreshold = prob
+	}
+	if choice == 11 {
+		g.print("Enter Target Score: ")
+		score, err := g.getIntInput(1, 100)
+		if err != nil {
+			score = 30
+		}
+		strategy = PlayRoundTo(score)
+		targetScore = score
+
+		g.print("Enter Gap Tolerance (e.g., 5): ")
+		gapTol, err := g.getIntInput(1, 50)
+		if err != nil {
+			gapTol = 20
+		}
+		gapTolerance = gapTol
+		g.print("Enter Slack Factor (e.g., 5): ")
+		slack, err := g.getIntInput(1, 20)
+		if err != nil {
+			slack = 5
+		}
+		slackFactor = slack
 	}
 
 	switch choice {
@@ -702,6 +727,11 @@ func (g *Game) getComputerPlayerSetup(computerNum int) (string, HitOrStayStrateg
 	case 10:
 		name += " (bayes)"
 		strategy = BayesianGainStrategy
+		actionTargetStrategy = TargetLeaderStrategy
+		positiveActionTargetStrategy = TargetLastPlaceStrategy
+	case 11:
+		name += fmt.Sprintf(" (gap%d_slack%d)", gapTolerance, slackFactor)
+		strategy = GapAwareStrategy(gapTolerance, slackFactor)
 		actionTargetStrategy = TargetLeaderStrategy
 		positiveActionTargetStrategy = TargetLastPlaceStrategy
 

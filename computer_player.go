@@ -248,6 +248,24 @@ func HybridStrategy(self PlayerInterface, gameState *GameState) bool {
 	return bustProb < baseBustThreshold
 }
 
+func GapAwareStrategy(TargetScore int, GapThreshold int) HitOrStayStrategy {
+	slackTarget := TargetScore - GapThreshold
+	aggressiveTarget := TargetScore - GapThreshold
+	slackTargetStrategy := PlayRoundTo(TargetScore)
+	aggressiveTargetStrategy := PlayRoundTo(aggressiveTarget)
+	normalTargetStrategy := PlayRoundTo(TargetScore)
+	return func(self PlayerInterface, gameState *GameState) bool {
+		score := self.CalculateRoundScore()
+		if score <= aggressiveTarget {
+			return aggressiveTargetStrategy(self, gameState)
+		} else if score >= slackTarget {
+			return slackTargetStrategy(self, gameState)
+		} else {
+			return normalTargetStrategy(self, gameState)
+		}
+	}
+}
+
 // GapBasedStrategy focuses on the score gap to other players
 func GapBasedStrategy(self PlayerInterface, gameState *GameState) bool {
 	if gameState.CurrentLeader == nil {
